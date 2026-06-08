@@ -1,4 +1,4 @@
-# AI Coding Agent Skills
+# AI Agent Skills
 
 A collection of agent skills I find others could benefit from.
 
