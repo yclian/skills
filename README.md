@@ -10,6 +10,9 @@ Synchronizes and merges conversation transcripts, project configurations, worksp
 ### 🧩 [antigravity-extras](./antigravity-extras)
 Operational tribal knowledge, hidden internals, quirks, and runbooks for **Google Antigravity / Antigravity 2.0** that agents don't natively know about themselves. Includes persistent Scheduled Tasks (sidecars), runtime lifecycles, and profile architectures.
 
+### ✉️ [gmail-filter-manager](./gmail-filter-manager)
+Compiles, validates, and safely deploys Gmail gateway routing filters (Terraform) without hitting silent delivery-time failures. Enforces flat boolean clauses, partition symmetry, and pre-apply canary checks.
+
 ## Installation
 
 To install skills from this repository:
