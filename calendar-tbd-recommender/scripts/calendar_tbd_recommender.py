@@ -90,7 +90,7 @@ class TravelContextResolver:
             # Check if this is a flight or transit event
             if flight_regex.search(full_text):
                 dest_city = None
-                arrow_match = re.search(r"[A-Z]{3}\s*(?:→|->)\s*([A-Z]{3})", full_text, re.IGNORECASE)
+                arrow_match = re.search(r"[A-Z]{3}\s*(?:\u2192|->)\s*([A-Z]{3})", full_text, re.IGNORECASE)
                 if arrow_match:
                     arr_code = arrow_match.group(1).upper()
                     for pat, city in self.CITY_PATTERNS:
@@ -112,22 +112,31 @@ class TravelContextResolver:
                     if ev_date:
                         flight_points.append((ev_date, dest_city))
 
-            # Check all-day location blocks like "SK CK in Penang" or "KMS in KL"
-            in_city_match = re.search(r"\bin\s+([A-Za-z\s]+)", summary, re.IGNORECASE)
-            if in_city_match:
-                target = in_city_match.group(1).strip()
+            # Explicit personal travel blocks: e.g. "Trip to Melbourne", "Traveling to Tokyo"
+            travel_match = re.search(r"\b(?:Trip to|Traveling to|Travelling to)\s+([A-Za-z\s]+)", summary, re.IGNORECASE)
+            if travel_match:
+                target = travel_match.group(1).strip()
                 for pat, city in self.CITY_PATTERNS:
                     if re.search(pat, target, re.IGNORECASE):
                         ev_date = self._extract_date(ev)
                         if ev_date:
                             self.city_ranges.append((ev_date, ev_date + datetime.timedelta(days=3), city))
+                        break
 
-        # Chain flight arrivals sequentially
+        # Deduplicate and chain flight arrivals sequentially
         flight_points.sort(key=lambda x: x[0])
-        for i, (f_date, f_city) in enumerate(flight_points):
-            if i + 1 < len(flight_points):
-                next_date = flight_points[i + 1][0]
-                self.city_ranges.append((f_date, next_date, f_city))
+        clean_points = []
+        seen = set()
+        for d, c in flight_points:
+            if (d, c) not in seen:
+                seen.add((d, c))
+                clean_points.append((d, c))
+
+        for i, (f_date, f_city) in enumerate(clean_points):
+            if i + 1 < len(clean_points):
+                next_date = clean_points[i + 1][0]
+                if next_date > f_date:
+                    self.city_ranges.append((f_date, next_date, f_city))
             else:
                 self.city_ranges.append((f_date, f_date + datetime.timedelta(days=7), f_city))
 
@@ -163,7 +172,7 @@ class ContextClassifier:
         attendee_count = len(attendees)
         if attendee_count <= 2:
             is_1v1 = True
-        if re.search(r"(1:1|1v1|×|<>|\bx\b)", summary, re.IGNORECASE):
+        if re.search(r"(1:1|1v1|\u00d7|<>|\bx\b)", summary, re.IGNORECASE):
             is_1v1 = True
 
         # 2. Time of day
@@ -200,11 +209,13 @@ class ContextClassifier:
             intents.append("dinner")
 
         return {
+            "summary": summary,
             "is_1v1": is_1v1,
             "attendee_count": attendee_count,
             "time_slot": time_slot,
             "hour": hour,
-            "intents": intents
+            "intents": intents,
+            "special_note": desc.strip() if desc else None
         }
 
 
@@ -212,24 +223,34 @@ def is_placeholder_location(ev: Dict[str, Any]) -> bool:
     """Returns True if summary or location indicates an unresolved venue."""
     summary = ev.get("summary", "").strip()
     loc = ev.get("location", "").strip()
-    attendees = ev.get("attendees", [])
+    desc = ev.get("description", "").strip()
 
-    # Filter out personal routines, habits, learning, and domestic chores
+    # Filter out personal routines, habits, learning, domestic chores, fitness, flights
     ignore_patterns = re.compile(
-        r"(daily\s+book\s+reading|wine\s+review|podcast|article|tweet|sleep|housekeeping|laundry|daycare|packwalk|boarding|shop\s+for|delivery|tab\s+clean-up|investor\s+time|cto\s+time|machine\s+reboot|review\s+\d{4}\s+board|social\s+black-out)",
+        r"(daily\s+book\s+reading|wine\s+review|podcast|article|tweet|sleep|housekeeping|laundry|daycare|packwalk|boarding|shop\s+for|delivery|tab\s+clean-up|investor\s+time|cto\s+time|machine\s+reboot|review\s+\d{4}\s+board|social\s+black-out|fuze|blaze|pure\s+(?:fitness|yoga)|health\s+assessment|airport\s+transit|flight\s+to)",
         re.IGNORECASE
     )
     if ignore_patterns.search(summary):
         return False
 
-    # Explicit TBD keywords in summary or location
     tbd_pattern = re.compile(r"\b(TBD|TBC|\?\?\?|Location TBD|Venue TBD)\b", re.IGNORECASE)
-    if tbd_pattern.search(summary) or tbd_pattern.search(loc):
+
+    # Check if location itself is a placeholder or empty
+    loc_is_placeholder = not loc or bool(tbd_pattern.search(loc)) or bool(re.match(r"^\[[\w\s,-]+\]$", loc))
+
+    # If location is already confirmed and not a placeholder, skip
+    if not loc_is_placeholder:
+        return False
+
+    # 1. Explicit TBD keywords in summary, location, or description
+    if tbd_pattern.search(summary) or tbd_pattern.search(loc) or tbd_pattern.search(desc):
         return True
 
-    # Empty location with external attendees and social meeting cues
-    if not loc and len(attendees) > 0:
-        social_cue = re.compile(r"(dinner|lunch|coffee|drinks|catch[\s-]*up|1:1|1v1|×|<>|\bmeet\b|breakfast|brunch)", re.IGNORECASE)
+    # 2. Bracketed area placeholder in summary with social/dining cue
+    # e.g., "Coffee YC <> Sanjev [KL Sentral]"
+    bracket_match = re.search(r"\[([A-Za-z0-9\s,-]+)\]", summary)
+    if bracket_match:
+        social_cue = re.compile(r"\b(coffee|lunch|dinner|drinks|cocktails|wine|catch[\s-]*up|breakfast|brunch|bistro)\b", re.IGNORECASE)
         if social_cue.search(summary):
             return True
 
@@ -253,10 +274,14 @@ def match_venues(
     time_slot = context.get("time_slot", "")
     is_1v1 = context.get("is_1v1", False)
 
+    # Neighborhood / keyword context from summary or note (e.g. "Steppe", "KL Sentral", "Bangsar")
+    context_text = f"{context.get('summary', '')} {context.get('special_note', '')}".lower()
+
     for v in all_venues:
         score = 0
         tags = set(v.get("tags", []))
         cat = v.get("category", "").lower()
+        nhood = v.get("neighborhood", "").lower()
 
         # Intent scoring
         for intent in intents:
@@ -274,6 +299,17 @@ def match_venues(
         # 1v1 acoustic score
         if is_1v1 and ("1v1" in tags or "quiet" in tags):
             score += 8
+
+        # Area / neighborhood boost
+        # e.g. "Steppe" matches "Mont Kiara / Steppes", "Bangsar" matches "Bangsar / Jalan Abdullah"
+        for part in nhood.split("/"):
+            clean_part = part.strip()
+            if len(clean_part) >= 4 and clean_part in context_text:
+                score += 15
+                break
+            if "steppe" in context_text and "steppes" in clean_part:
+                score += 15
+                break
 
         scored_venues.append((score, v))
 
