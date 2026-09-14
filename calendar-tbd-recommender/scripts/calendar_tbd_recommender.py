@@ -58,7 +58,7 @@ def get_calendar_service(credentials_path: Optional[str] = None):
 
 
 class TravelContextResolver:
-    """Detects flight and transit events to build a daily city presence map."""
+    """Detects flight and transit blocks to establish daily city presence."""
 
     # Airport / city keyword mapping
     CITY_PATTERNS = [
@@ -80,6 +80,7 @@ class TravelContextResolver:
     def ingest_events(self, events: List[Dict[str, Any]]):
         """Scans flight and travel events to establish date ranges in foreign cities."""
         flight_regex = re.compile(r"(Flight to|Airport transit|taking off|\b[A-Z0-9]{2,3}\s*\d{2,4}\b|→|->)", re.IGNORECASE)
+        flight_points: List[Tuple[datetime.date, str]] = []
 
         for ev in events:
             summary = ev.get("summary", "")
@@ -88,9 +89,7 @@ class TravelContextResolver:
 
             # Check if this is a flight or transit event
             if flight_regex.search(full_text):
-                # Detect arrival destination
                 dest_city = None
-                # Check arrow transit patterns: e.g. SIN → KUL or SIN -> KUL
                 arrow_match = re.search(r"[A-Z]{3}\s*(?:→|->)\s*([A-Z]{3})", full_text, re.IGNORECASE)
                 if arrow_match:
                     arr_code = arrow_match.group(1).upper()
@@ -100,7 +99,6 @@ class TravelContextResolver:
                             break
 
                 if not dest_city:
-                    # Check "Flight to <City>"
                     to_match = re.search(r"Flight to\s+([A-Za-z\s]+)", full_text, re.IGNORECASE)
                     if to_match:
                         target = to_match.group(1).strip()
@@ -112,8 +110,7 @@ class TravelContextResolver:
                 if dest_city:
                     ev_date = self._extract_date(ev)
                     if ev_date:
-                        # Record a provisional destination window of 7 days (or until next return flight)
-                        self.city_ranges.append((ev_date, ev_date + datetime.timedelta(days=7), dest_city))
+                        flight_points.append((ev_date, dest_city))
 
             # Check all-day location blocks like "SK CK in Penang" or "KMS in KL"
             in_city_match = re.search(r"\bin\s+([A-Za-z\s]+)", summary, re.IGNORECASE)
@@ -124,6 +121,15 @@ class TravelContextResolver:
                         ev_date = self._extract_date(ev)
                         if ev_date:
                             self.city_ranges.append((ev_date, ev_date + datetime.timedelta(days=3), city))
+
+        # Chain flight arrivals sequentially
+        flight_points.sort(key=lambda x: x[0])
+        for i, (f_date, f_city) in enumerate(flight_points):
+            if i + 1 < len(flight_points):
+                next_date = flight_points[i + 1][0]
+                self.city_ranges.append((f_date, next_date, f_city))
+            else:
+                self.city_ranges.append((f_date, f_date + datetime.timedelta(days=7), f_city))
 
     def resolve_city_for_date(self, target_date: datetime.date) -> str:
         """Finds matching active city for a specific date, fallback to default_city."""
@@ -206,15 +212,24 @@ def is_placeholder_location(ev: Dict[str, Any]) -> bool:
     """Returns True if summary or location indicates an unresolved venue."""
     summary = ev.get("summary", "").strip()
     loc = ev.get("location", "").strip()
+    attendees = ev.get("attendees", [])
 
-    # Explicit TBD keywords
+    # Filter out personal routines, habits, learning, and domestic chores
+    ignore_patterns = re.compile(
+        r"(daily\s+book\s+reading|wine\s+review|podcast|article|tweet|sleep|housekeeping|laundry|daycare|packwalk|boarding|shop\s+for|delivery|tab\s+clean-up|investor\s+time|cto\s+time|machine\s+reboot|review\s+\d{4}\s+board|social\s+black-out)",
+        re.IGNORECASE
+    )
+    if ignore_patterns.search(summary):
+        return False
+
+    # Explicit TBD keywords in summary or location
     tbd_pattern = re.compile(r"\b(TBD|TBC|\?\?\?|Location TBD|Venue TBD)\b", re.IGNORECASE)
     if tbd_pattern.search(summary) or tbd_pattern.search(loc):
         return True
 
-    # Empty location with catchup / social dinner cues
-    if not loc:
-        social_cue = re.compile(r"(dinner|lunch|coffee|drinks|catch[\s-]*up|1:1|×|<>|🍷|🍸|☕)", re.IGNORECASE)
+    # Empty location with external attendees and social meeting cues
+    if not loc and len(attendees) > 0:
+        social_cue = re.compile(r"(dinner|lunch|coffee|drinks|catch[\s-]*up|1:1|1v1|×|<>|\bmeet\b|breakfast|brunch)", re.IGNORECASE)
         if social_cue.search(summary):
             return True
 
