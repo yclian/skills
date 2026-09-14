@@ -13,6 +13,9 @@ Operational tribal knowledge, hidden internals, quirks, and runbooks for **Googl
 ### ✉️ [gmail-filter-manager](./gmail-filter-manager)
 Compiles, validates, and safely deploys Gmail gateway routing filters (Terraform) without hitting silent delivery-time failures. Enforces flat boolean clauses, partition symmetry, and pre-apply canary checks.
 
+### 🍸 [calendar-tbd-recommender](./calendar-tbd-recommender)
+Audits Google Calendar for events marked with placeholder locations (TBD, TBC, ???, or blank), dynamically detects travel & flight context, and recommends personalized dining, cocktail, or coffee venues from a curated taste graph. Includes direct event patching.
+
 ## Installation
 
 To install skills from this repository:

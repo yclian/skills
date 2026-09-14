@@ -1,0 +1,108 @@
+# Example Curated Venues Taste Graph Configuration
+default_city: "Singapore"
+
+cities:
+  Singapore:
+    timezone: "Asia/Singapore"
+    venues:
+      - id: "sg-live-twice"
+        name: "Live Twice"
+        category: "cocktails"
+        neighborhood: "Bukit Pasoh / Tanjong Pagar"
+        vibe: "Intimate mid-century Ginza-inspired cocktail salon. Quiet, discreet, purpose-built for 1v1 conversations."
+        tags: ["cocktails", "1v1", "evening", "quiet", "drinks"]
+        url: "https://www.livetwice.sg/"
+        address: "18-20 Bukit Pasoh Rd, Singapore 089834"
+
+      - id: "sg-somma"
+        name: "Somma"
+        category: "wine_and_cocktails"
+        neighborhood: "Clarke Quay / New Bridge Rd"
+        vibe: "Cocktail & Italian natural wine bar downstairs, modern pasta upstairs. Seamless drinks-to-dinner flow."
+        tags: ["wine", "cocktails", "dinner", "1v1", "evening"]
+        url: "https://www.somma.sg/"
+        address: "140 New Bridge Rd, Singapore 059443"
+
+      - id: "sg-origin"
+        name: "Origin Bar"
+        category: "cocktails"
+        neighborhood: "Orchard"
+        vibe: "Elevated cocktail storytelling and plush hotel seating. Spacious, elegant, great hospitality."
+        tags: ["cocktails", "hotel", "drinks", "evening"]
+        url: "https://www.shangri-la.com/singapore/shangrila/dining/bars-lounges/origin-bar/"
+        address: "Shangri-La Singapore, 22 Orange Grove Rd, Singapore 258350"
+
+      - id: "sg-the-store"
+        name: "The Store"
+        category: "cocktails"
+        neighborhood: "Tanjong Pagar / Neil Rd"
+        vibe: "Friendly, unpretentious living-room style cocktail bar with European comfort bites."
+        tags: ["cocktails", "casual", "evening", "drinks"]
+        url: "https://www.thestoresg.com/"
+        address: "11 Neil Rd, Singapore 088809"
+
+  Kuala Lumpur:
+    timezone: "Asia/Kuala_Lumpur"
+    venues:
+      - id: "kl-penrose"
+        name: "Penrose"
+        category: "cocktails"
+        neighborhood: "Chinatown / Petaling St"
+        vibe: "Jon Lee's 25-seater cocktail temple (Asia's 50 Best). Intimate, precision craft, focused acoustics."
+        tags: ["cocktails", "1v1", "evening", "craft"]
+        url: "https://www.instagram.com/penrose.kl/"
+        address: "Petaling Street, Chinatown, Kuala Lumpur"
+
+      - id: "kl-chocha"
+        name: "Chocha Foodstore / Botakliquor"
+        category: "dinner_and_wine"
+        neighborhood: "Chinatown / Petaling St"
+        vibe: "Modern Malaysian sharing plates with low-intervention wines, paired with botanic cocktails upstairs."
+        tags: ["wine", "dinner", "cocktails", "1v1", "evening"]
+        url: "https://www.chochafoodstore.com/"
+        address: "156 Jalan Petaling, Kuala Lumpur"
+
+      - id: "kl-coley"
+        name: "Coley"
+        category: "cocktails"
+        neighborhood: "Bangsar"
+        vibe: "CK Kho's welcoming Bangsar cocktail institution. Relaxed, convivial, top-notch drinks."
+        tags: ["cocktails", "casual", "evening", "1v1"]
+        url: "https://www.instagram.com/coleylounge/"
+        address: "6-G Jalan Telawi 2, Bangsar, Kuala Lumpur"
+
+      - id: "kl-unwined-plus"
+        name: "Unwined Plus / Unwined Cabana"
+        category: "wine"
+        neighborhood: "Chinatown / Else Hotel"
+        vibe: "Curated low-intervention and natural wine specialist in a chic boutique hotel setting."
+        tags: ["wine", "natural_wine", "evening", "1v1", "chic"]
+        url: "https://www.instagram.com/unwinedplus/"
+        address: "Else Hotel, 145 Jalan Tun H S Lee, City Centre, Kuala Lumpur"
+
+      - id: "kl-transparent-coffee"
+        name: "Transparent Coffee"
+        category: "coffee"
+        neighborhood: "Bangsar / Jalan Abdullah"
+        vibe: "Artisan micro-roaster, minimalist design, peaceful morning acoustics for 1v1 catch-ups."
+        tags: ["coffee", "morning", "brunch", "1v1", "quiet"]
+        url: "https://www.instagram.com/transparent_bangsar/"
+        address: "Jalan Abdullah, Bangsar, Kuala Lumpur"
+
+      - id: "kl-one-half-bask"
+        name: "One Half Coffee / Bask"
+        category: "coffee"
+        neighborhood: "Mont Kiara / Steppes"
+        vibe: "Championship filter coffee roasters paired with artisan burnt cheesecakes."
+        tags: ["coffee", "morning", "dessert", "1v1"]
+        url: "https://www.instagram.com/onehalf_coffee/"
+        address: "Steppes @ Mont Kiara, 32 Jalan Kiara 3, Mont Kiara, Kuala Lumpur"
+
+      - id: "kl-junglebird"
+        name: "Junglebird"
+        category: "cocktails"
+        neighborhood: "Damansara Heights"
+        vibe: "Internationally acclaimed cocktail lounge (Asia's 50 Best) with tropical elegance."
+        tags: ["cocktails", "rum", "evening", "vibrant"]
+        url: "https://junglebirdkl.com/"
+        address: "61M Jalan Medan Setia 1, Bukit Damansara, Kuala Lumpur"
