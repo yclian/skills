@@ -16,6 +16,9 @@ Compiles, validates, and safely deploys Gmail gateway routing filters (Terraform
 ### 🍸 [calendar-tbd-recommender](./calendar-tbd-recommender)
 Audits Google Calendar for events marked with placeholder locations (TBD, TBC, ???, or blank), dynamically detects travel & flight context, and recommends personalized dining, cocktail, or coffee venues from a curated taste graph. Includes direct event patching.
 
+### ⚡ [laya-system-one](./laya-system-one)
+Sets up, operates, and builds with **Laya**: a local, non-autoregressive "System 1" decision engine powered by ModernBERT-large (395M). Delivers typed judgments (Choice, Noul, Score) in ~35ms on standard CPU (~842 MB RAM, $0.00 token cost). Includes 1-command installer, FastAPI daemon, Model Context Protocol (MCP) gateway for Claude Code and Antigravity CLI, and LiteLLM OpenAI proxy endpoints.
+
 ## Installation
 
 To install skills from this repository:
