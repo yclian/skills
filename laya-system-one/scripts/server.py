@@ -18,8 +18,12 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import laya
+import torch
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
+
+# Limit intra-op CPU threads to prevent CPU thrashing
+torch.set_num_threads(int(os.getenv("LAYA_NUM_THREADS", "4")))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("laya-service")
@@ -29,6 +33,10 @@ mcp = MCPServer("laya")
 
 # Global Laya agent
 agent: Optional[laya.Agent] = None
+
+def _scrub(text: str) -> str:
+    """Neutralize [MASK] injection attacks before tokenization."""
+    return text.replace("[MASK]", " ") if text else ""
 
 # MCP Tool: laya_classify
 @mcp.tool()
@@ -53,7 +61,7 @@ def laya_classify(
                 "criteria": categories
             }
         }
-        res = agent.predict(item, q)
+        res = agent.predict(_scrub(item), q)
         ans = res.get("answers", {}).get("cat", {})
         results.append({
             "item": item,
@@ -83,7 +91,7 @@ def laya_decide(
             "criteria": options
         }
     }
-    res = agent.predict(text, q)
+    res = agent.predict(_scrub(text), q)
     ans = res.get("answers", {}).get("decision", {})
     return {
         "choice": ans.get("choice"),
@@ -109,7 +117,7 @@ def laya_noul(
             "instructions": condition
         }
     }
-    res = agent.predict(text, q)
+    res = agent.predict(_scrub(text), q)
     ans = res.get("answers", {}).get("condition", {})
     return {
         "yes_probability": ans.get("noul"),
@@ -137,7 +145,7 @@ def laya_score(
             "criteria": levels
         }
     }
-    res = agent.predict(text, q)
+    res = agent.predict(_scrub(text), q)
     ans = res.get("answers", {}).get("metric", {})
     return {
         "expected_score": ans.get("score"),
@@ -150,15 +158,17 @@ def laya_score(
 @mcp.tool()
 def laya_eval(
     state: Union[str, Dict[str, Any]],
-    questions: Dict[str, Dict[str, Any]]
+    questions: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Evaluate multiple independent System 1 questions (choice, noul, score)
-    over a single shared state in one parallel forward pass (~40ms total).
+    """Evaluate multiple questions against arbitrary state in ONE forward pass (~35ms).
+    Matches the native system_one paradigm. Questions can mix choice, noul, and score.
     """
     if agent is None:
         raise RuntimeError("Laya model not ready")
     
-    res = agent.predict(state, questions)
+    clean_state = _scrub(state) if isinstance(state, str) else state
+    t0 = time.time()
+    res = agent.predict(clean_state, questions)
     return {
         "answers": res.get("answers", {}),
         "usage": res.get("usage", {})
@@ -192,7 +202,13 @@ def laya_triage_error(
             "criteria": categories
         }
     }
-    input_text = f"Context: {context}\nError:\n{error_traceback}" if context else error_traceback
+    # Take the tail of the traceback (where root exception and error message live)
+    lines = error_traceback.strip().splitlines()
+    tail_trace = "\n".join(lines[-35:]) if len(lines) > 35 else error_traceback
+    clean_trace = _scrub(tail_trace)
+    clean_context = _scrub(context) if context else None
+    input_text = f"Context: {clean_context}\nError:\n{clean_trace}" if clean_context else clean_trace
+
     res = agent.predict(input_text, q)
     ans = res.get("answers", {}).get("defect", {})
     defect_type = ans.get("choice", "LOGIC_OR_ASSERTION")
@@ -269,7 +285,8 @@ def direct_decide(req: DirectDecideRequest):
                 "criteria": req.options or {}
             }
         }
-    res = agent.predict(req.text, q)
+    input_data = _scrub(req.text) if isinstance(req.text, str) else req.text
+    res = agent.predict(input_data, q)
     latency_ms = (time.time() - t0) * 1000
     return {
         "answers": res.get("answers", {}),
@@ -285,8 +302,8 @@ async def chat_completions(request: Request):
     messages = body.get("messages", [])
     model_name = body.get("model", "laya-decision")
     
-    user_text = ""
     system_text = ""
+    user_text = ""
     for m in messages:
         if m.get("role") == "system":
             system_text = m.get("content", "")
@@ -308,7 +325,7 @@ async def chat_completions(request: Request):
     }
     
     t0 = time.time()
-    res = agent.predict(full_text, q)
+    res = agent.predict(_scrub(full_text), q)
     latency_ms = (time.time() - t0) * 1000
     ans = res.get("answers", {}).get("routing", {})
     
