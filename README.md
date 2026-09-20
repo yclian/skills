@@ -19,6 +19,12 @@ Audits Google Calendar for events marked with placeholder locations (TBD, TBC, ?
 ### ⚡ [laya-system-one](./laya-system-one)
 Sets up, operates, and builds with **Laya**: a local, non-autoregressive "System 1" decision engine powered by ModernBERT-large (395M). Delivers typed judgments (Choice, Noul, Score) in ~35ms on standard CPU (~842 MB RAM, $0.00 token cost). Includes 1-command installer, FastAPI daemon, Model Context Protocol (MCP) gateway for Claude Code and Antigravity CLI, and LiteLLM OpenAI proxy endpoints.
 
+### ✅ [todo-in-obsidian](./todo-in-obsidian)
+Reviews, triages, and carries forward TODOs across weekly journal notes in Obsidian. Runs a structured backlog review with disposition codes (DAL, DSE, KIV, NIN...), effort estimates, delegability assessments, and per-item user confirmation, then closes out old notes and rolls deserving items into the new week.
+
+### 🎯 [work-signal](./work-signal)
+Morning triage engine for a work Gmail inbox: surfaces what actually needs human attention (leadership threads, security alerts, access approvals, colleague asks), suppresses high-volume CI and vendor noise, and renders an executive Markdown brief in chat. Includes dual execution paths (Claude Gmail connector vs. local Node 18+ CLI).
+
 ## Installation
 
 To install skills from this repository:

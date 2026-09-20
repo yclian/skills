@@ -1,0 +1,98 @@
+# work-signal — configuration template
+#
+# Copy this to a directory named `work-signal.local` SITTING BESIDE the installed
+# skill, as `../work-signal.local/signal.toml`, then edit. The engine resolves it
+# relative to its own location, so nothing here ever needs an absolute path.
+#
+#   <skills-root>/work-signal/            <- the skill (this repo)
+#   <skills-root>/work-signal.local/      <- your private config; no SKILL.md
+#
+# Alternatively point $WORK_SIGNAL_CONFIG at any file.
+#
+# Keep the .local directory out of version control: it holds real names and
+# addresses. This file must never.
+
+[meta]
+# Printed in the brief's footer. Bump it when you change anything below, so a
+# stale copy published elsewhere is visible rather than silent.
+version = "2.0"
+
+[identity]
+email            = "you@example.com"
+internal_domains = ["example.com"]          # drives "from:<domain>" in the query
+timezone         = "Europe/London"          # IANA name; drives the window and header
+me_aliases       = ["you@example.com"]      # other spellings of you in To/Cc
+
+[window]
+weekday_days    = 1    # Tue-Sat: look back this many days
+monday_days     = 2    # Monday: reach back over the weekend
+still_open_days = 7    # how far back the "still open" probe looks
+
+[query]
+# Composed with in:inbox + the window + identity.internal_domains.
+# Keep is:important: it is the only clause that catches an unknown-but-important
+# external sender no keyword or domain rule would reach.
+include_extra = [
+  "is:important",
+  'subject:(verification OR security OR urgent OR approval OR "action required")',
+]
+exclude = [
+  "category:promotions",
+  "category:social",
+  # "from:ci.example.com",
+]
+
+[noise]
+# Suppressed and counted. Gmail's -from: works per message, so a thread still
+# surfaces if any one message matches — these lists catch that residue.
+pipeline_senders = [
+  # "notifications-noreply@bitbucket.org",
+]
+vendor_senders = [
+  # "marketing@vendor.example",
+]
+subject_patterns = ["% off", "webinar", "course"]
+
+# --- Buckets -----------------------------------------------------------------
+# First match wins, in this order: leadership, security, approvals, digests, team.
+# Match senders on "local-part@" or a full address — never a bare substring, or
+# "sam" will match every Samantha in the company.
+
+[buckets.leadership]
+senders = [
+  # "ceo@example.com",
+  # "your.manager@",
+]
+
+[buckets.security]
+senders  = [
+  # "@vanta.com",
+  # "@okta.com",
+]
+keywords = [
+  "verification", "security", "audit", "compliance",
+  "action required", "urgent", "credential", "certificate",
+]
+
+[buckets.approvals]
+keywords = ["approval", "approve", "purchase order", "requested access to"]
+
+[buckets.digests]
+senders  = []
+keywords = ["report", "digest"]
+
+[buckets.team]
+# Chat relays arrive from a no-reply address; the real mentioner is in the
+# subject and gets extracted.
+relay_senders = [
+  # "chat-noreply@google.com",
+]
+
+[report]
+show_suppressed_counts = true
+max_rows_per_bucket    = 12
+emoji_headings         = true
+
+[auth]
+# Node CLI path only. Ignored when the Gmail connector is used.
+dir = "~/.config/work-signal"
