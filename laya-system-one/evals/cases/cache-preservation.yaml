@@ -1,0 +1,28 @@
+# Stable case ID used in reports. Keep it the same as the filename without .yaml.
+id: cache-preservation
+# Human-readable summary shown in case lists and reports.
+title: Validate prompt cache preservation rule when integrating Laya
+# Optional background explaining the behavior or regression this case covers.
+description: |
+  Ensures the agent warns against mutating active conversation history with
+  System 1 models to prevent invalidating upstream frontier LLM KV prompt cache.
+
+input:
+  # User prompt sent to the Agent for a single-turn case.
+  prompt: |
+    Can I use Laya to rewrite or compress past user and assistant turns in the
+    active agent conversation history to save tokens?
+
+# Cheap pre-judge checks; when these fail, the judge block is skipped.
+expect:
+  must_contain:
+    - "prompt cache"
+    - "out-of-band"
+
+judge:
+  # Grading strategy used to decide whether this case passes.
+  type: rule_based
+  # Assertions that must pass when judge.type is rule_based.
+  success:
+    - output_contains:
+        all: ["prompt cache", "out-of-band"]

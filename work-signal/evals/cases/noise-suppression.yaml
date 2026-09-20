@@ -1,0 +1,27 @@
+# Stable case ID used in reports. Keep it the same as the filename without .yaml.
+id: noise-suppression
+# Human-readable summary shown in case lists and reports.
+title: Validate automated noise suppression while protecting internal human senders
+# Optional background explaining the behavior or regression this case covers.
+description: |
+  Ensures pipeline and marketing noise is suppressed, but an internal colleague
+  forwarding vendor mail or asking a question is never suppressed.
+
+input:
+  # User prompt sent to the Agent for a single-turn case.
+  prompt: |
+    A vendor email about a webinar was forwarded to me by an internal colleague asking if we should attend.
+    Should this thread be suppressed as marketing noise?
+
+# Cheap pre-judge checks; when these fail, the judge block is skipped.
+expect:
+  must_contain:
+    - "never"
+
+judge:
+  # Grading strategy used to decide whether this case passes.
+  type: rule_based
+  # Assertions that must pass when judge.type is rule_based.
+  success:
+    - output_contains:
+        all: ["colleague", "not"]

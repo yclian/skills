@@ -1,0 +1,27 @@
+# Stable case ID used in reports. Keep it the same as the filename without .yaml.
+id: nodejs-onnx
+# Human-readable summary shown in case lists and reports.
+title: Validate Node.js ONNX Runtime track without Python dependency
+# Optional background explaining the behavior or regression this case covers.
+description: |
+  Ensures the agent recommends @receptron/laya when building TypeScript/Node
+  tools that require zero Python and zero daemon overhead.
+
+input:
+  # User prompt sent to the Agent for a single-turn case.
+  prompt: |
+    How can I run Laya in my Node.js application without installing Python or PyTorch?
+
+# Cheap pre-judge checks; when these fail, the judge block is skipped.
+expect:
+  must_contain:
+    - "@receptron/laya"
+    - "ONNX"
+
+judge:
+  # Grading strategy used to decide whether this case passes.
+  type: rule_based
+  # Assertions that must pass when judge.type is rule_based.
+  success:
+    - output_contains:
+        all: ["@receptron/laya", "ONNX"]

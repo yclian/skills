@@ -1,0 +1,28 @@
+# Stable case ID used in reports. Keep it the same as the filename without .yaml.
+id: morning-brief-buckets
+# Human-readable summary shown in case lists and reports.
+title: Validate bucket hierarchy and ordering for morning email triage
+# Optional background explaining the behavior or regression this case covers.
+description: |
+  Ensures work-signal categorizes threads according to strict bucket precedence:
+  leadership -> security -> approvals -> digests -> team.
+
+input:
+  # User prompt sent to the Agent for a single-turn case.
+  prompt: |
+    Run morning triage on my work inbox. In what order of precedence should threads be bucketed?
+
+# Cheap pre-judge checks; when these fail, the judge block is skipped.
+expect:
+  must_contain:
+    - "leadership"
+    - "security"
+    - "approvals"
+
+judge:
+  # Grading strategy used to decide whether this case passes.
+  type: rule_based
+  # Assertions that must pass when judge.type is rule_based.
+  success:
+    - output_contains:
+        all: ["leadership", "security", "approvals"]

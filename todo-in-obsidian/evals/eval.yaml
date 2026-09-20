@@ -1,0 +1,29 @@
+# Evaluation config schema version used by skill-up. Do not change this value.
+schema_version: v1alpha1
+
+environment:
+  # Runtime environment used for each case; use none when no sandbox is needed.
+  type: none
+
+skills:
+  # Skills installed into the Agent Engine before running cases.
+  - source: local_path
+    path: .
+
+engine:
+  # Agent Engine used to execute prompts and produce outputs for grading.
+  name: claude_code
+
+cases:
+  # Case YAML files included in this eval suite, relative to the Skill root.
+  files:
+    - evals/cases/disposition-codes.yaml
+    - evals/cases/template-discovery.yaml
+  # Default constraints inherited by every case unless the case overrides them.
+  defaults:
+    timeout_seconds: 120
+    max_turns: 5
+
+report:
+  # Report formats written after each run.
+  formats: [json]

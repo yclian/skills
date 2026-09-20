@@ -1,0 +1,32 @@
+# Stable case ID used in reports. Keep it the same as the filename without .yaml.
+id: disposition-codes
+# Human-readable summary shown in case lists and reports.
+title: Validate correct disposition code assignment during weekly TODO triage
+# Optional background explaining the behavior or regression this case covers.
+description: |
+  Ensures the agent applies standard disposition codes (DAL, DSE, DLT, KIV, NIN)
+  and follows the rule that DAL requires creating the duplicate in the target note.
+
+input:
+  # User prompt sent to the Agent for a single-turn case.
+  prompt: |
+    I have three items from last week's note:
+    1. "Review team budget" - I want to carry this to next week's note.
+    2. "Prepare slide deck" - I want to delegate this to Sarah.
+    3. "Explore new graph database" - Park this deliberately for next month.
+    Which disposition codes should be used for these three items?
+
+# Cheap pre-judge checks; when these fail, the judge block is skipped.
+expect:
+  must_contain:
+    - "DAL"
+    - "DSE"
+    - "DLT"
+
+judge:
+  # Grading strategy used to decide whether this case passes.
+  type: rule_based
+  # Assertions that must pass when judge.type is rule_based.
+  success:
+    - output_contains:
+        all: ["DAL", "DSE", "DLT"]

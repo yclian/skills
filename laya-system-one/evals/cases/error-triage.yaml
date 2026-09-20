@@ -1,0 +1,29 @@
+# Stable case ID used in reports. Keep it the same as the filename without .yaml.
+id: error-triage
+# Human-readable summary shown in case lists and reports.
+title: Validate operational traceback triage using Laya System 1 primitives
+# Optional background explaining the behavior or regression this case covers.
+description: |
+  Ensures the agent uses Laya to quickly categorize a runtime defect
+  and prescribe deterministic repair without invoking expensive LLM reasoning.
+
+input:
+  # User prompt sent to the Agent for a single-turn case.
+  prompt: |
+    I got this shell traceback during command execution:
+    "json.decoder.JSONDecodeError: Expecting ',' delimiter: line 12 column 5 (char 310)"
+    How should I triage and repair this error using Laya?
+
+# Cheap pre-judge checks; when these fail, the judge block is skipped.
+expect:
+  must_contain:
+    - "SYNTAX_FORMAT_ERROR"
+    - "FAST_REPAIR"
+
+judge:
+  # Grading strategy used to decide whether this case passes.
+  type: rule_based
+  # Assertions that must pass when judge.type is rule_based.
+  success:
+    - output_contains:
+        all: ["SYNTAX_FORMAT_ERROR", "FAST_REPAIR"]

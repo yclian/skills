@@ -1,0 +1,26 @@
+# Stable case ID used in reports. Keep it the same as the filename without .yaml.
+id: template-discovery
+# Human-readable summary shown in case lists and reports.
+title: Validate dynamic template discovery without hardcoding paths
+# Optional background explaining the behavior or regression this case covers.
+description: |
+  Ensures the agent searches for existing templates (*template*.md) or derives
+  structure from recent notes rather than assuming fixed file paths or section names.
+
+input:
+  # User prompt sent to the Agent for a single-turn case.
+  prompt: |
+    I want to set up my new weekly note for 2026.W39. Where should you get the template structure from?
+
+# Cheap pre-judge checks; when these fail, the judge block is skipped.
+expect:
+  must_contain:
+    - "template"
+
+judge:
+  # Grading strategy used to decide whether this case passes.
+  type: rule_based
+  # Assertions that must pass when judge.type is rule_based.
+  success:
+    - output_contains:
+        all: ["template"]
