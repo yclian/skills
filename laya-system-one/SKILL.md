@@ -25,11 +25,11 @@ Laya evaluates state in a **single forward pass** on standard CPU in **~35ms**, 
 ### Origins, Context & Acknowledgements
 This skill and architectural pattern are inspired by **TypeSafe AI's Jev** (the flagship System 1 decision model pioneered by Diogo Almeida, Erik Gafni, and Sasha Sheng; see their canonical skill at [typesafe-ai/skills](https://github.com/typesafe-ai/skills/blob/main/skills/typesafe-ai/SKILL.md)) and Daniel Kahneman's dual-process cognitive framework (*Thinking, Fast and Slow*). 
 
-With TypeSafe opening Jev for free access without a waitlist, System 1 decision heads are rapidly becoming the standard interface for agent routing. **Laya** serves as the self-hosted, open-weights complement for environments demanding full local sovereignty:
+With TypeSafe dropping Jev's waitlist and offering a $5 trial credit, System 1 decision heads are rapidly becoming the standard interface for agent routing. **Laya** serves as the self-hosted, open-weights complement for environments demanding full local sovereignty and true zero-token economics:
 
 | Dimension | **Laya** (This Skill) | **Jev** (TypeSafe AI) |
 | :--- | :--- | :--- |
-| **Hosting** | 100% Self-Hosted (Home server, Mini-PC, CPU) | Managed Cloud API (Free tier / FFA) |
+| **Hosting & Economics** | 100% Self-Hosted ($0.00 token cost forever on CPU) | Managed Cloud API ($5 trial credit, no waitlist; metered per request) |
 | **Underlying Weights** | Open weights: ModernBERT-large (395M) | Proprietary hosted decision model |
 | **Data Privacy** | Zero telemetry / Zero cloud egress | Hosted API endpoint |
 | **Inference Latency** | ~25–45ms (Local socket / IPC) | ~100–300ms (Network round-trip) |

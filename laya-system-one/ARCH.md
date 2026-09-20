@@ -71,7 +71,7 @@ flowchart TD
     end
 
     subgraph CloudFallbacks["Upstream Fallback Tier"]
-        JEV["Cloud Jev (TypeSafe API)\n(Free System 1 Fallback)"]
+        JEV["Cloud Jev (TypeSafe API)\n(Managed System 1 Cloud)"]
         FLASH["Gemini 3.8 Flash / Claude Haiku\n(Fast LLM Fallback)"]
     end
 
