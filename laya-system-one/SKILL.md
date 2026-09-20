@@ -37,13 +37,20 @@ With TypeSafe dropping Jev's waitlist and offering a $5 trial credit, System 1 d
 
 Both paradigms share the exact same machine-native primitives. Choose **Jev** for instant cloud-managed scale with zero infrastructure setup; choose **Laya** for air-gapped workflows, sensitive trace diagnosis, and zero-cost local CPU execution.
 
+Two primary runtimes are available for self-hosting Laya:
+- **Python / PyTorch Engine** (`convaiinnovations/laya`): Runs as a persistent HTTP/MCP background daemon for multi-agent environments.
+- **Node.js / TypeScript ONNX Engine** ([`@receptron/laya`](https://github.com/receptron/laya)): Runs via ONNX Runtime in-process. Requires **zero Python** and zero external daemon setup.
+
 ---
 
-## 1. Quickstart: 1-Command Local Setup
+## 1. Quickstart: Choosing Your Runtime
 
-You can run Laya on any Linux server, Intel/AMD Mini-PC, Raspberry Pi 5, or Windows WSL2 instance.
+Laya can be operated in two architectural patterns:
 
-### Step 1: Run the automated installer
+### Track A: Python FastMCP Daemon (Multi-Agent & Shared Fleet)
+Best for: Serving multiple agents (Claude Code, Antigravity CLI, LiteLLM) via a persistent HTTP/MCP daemon.
+
+#### Automated 1-Command Installer
 From the root of this skill:
 ```bash
 bash scripts/install_laya.sh
@@ -68,10 +75,61 @@ cp scripts/server.py /srv/laya/server.py
 ./venv/bin/python3 -m uvicorn server:app --host 0.0.0.0 --port 8500
 ```
 
-### Step 2: Verify Health
+Verify health:
 ```bash
 curl http://127.0.0.1:8500/health
 # {"status":"healthy","model":"convaiinnovations/laya","backbone":"ModernBERT-large (395M)","device":"cpu","ready":true}
+```
+
+---
+
+### Track B: Node.js / TypeScript In-Process ([`@receptron/laya`](https://github.com/receptron/laya))
+Best for: Pure Node/TS tools, CLI pipelines (e.g. `work-signal`), or embedding System 1 decisions directly inside an application without installing Python, PyTorch, or maintaining a daemon.
+
+#### Installation
+```bash
+npm install @receptron/laya
+```
+*(Node 20+ required. Downloads ONNX weights ~1.7 GB once to `~/.cache/receptron-laya`).*
+
+#### In-Process Usage (TypeScript)
+```ts
+import { Laya } from "@receptron/laya";
+
+// 1. Load ONNX runtime model (zero Python required)
+const laya = await Laya.load();
+
+// 2. Hand it arbitrary state + typed questions
+const result = await laya.systemOne(
+  {
+    error: "TypeError: Cannot read properties of undefined (reading 'headers')",
+    file: "src/server.ts",
+    line: 42
+  },
+  {
+    root_cause: {
+      type: "choice",
+      instructions: "What caused this crash?",
+      criteria: {
+        SYNTAX_FORMAT_ERROR: "Missing syntax, brackets, or bad json",
+        NULL_POINTER: "Accessing property on undefined or null",
+        NETWORK_TIMEOUT: "Socket hang up, network drops",
+        AUTH_DENIED: "401 or 403 forbidden"
+      }
+    },
+    safe_to_retry: {
+      type: "noul",
+      instructions: "Is this safe to immediately retry without code changes?"
+    }
+  }
+);
+
+console.log(result.answers.root_cause.choice);        // "NULL_POINTER"
+console.log(result.answers.safe_to_retry.noul);       // 0.041 (P(true) -> Do not retry)
+console.log(result.usage.input_tokens);               // ~110
+
+// 3. Clean up when finished
+await laya.close();
 ```
 
 ---

@@ -41,10 +41,12 @@ Laya offloads these semantic classification and routing tasks to a local CPU mic
 
 ## 2. System Topology & Deployment Architecture
 
-Laya operates as an always-on background daemon exposing three interface contracts:
-1. **Model Context Protocol (MCP)**: FastMCP Streamable HTTP (`/mcp`) for direct integration into interactive agent loops (Claude Code, Antigravity CLI).
-2. **OpenAI Chat Completions (`/v1/chat/completions`)**: Emulates an OpenAI-compatible completion endpoint for gateway routers (LiteLLM, OpenCode).
-3. **Direct JSON REST API (`/decide`, `/health`)**: Low-latency endpoints for cron pipelines, shell scripts, and webhook listeners.
+Laya can be deployed in two complementary operational topologies:
+
+1. **Persistent Gateway Daemon (Python + FastMCP)**: Centralized microservice exposing FastMCP (`/mcp`), OpenAI chat completions (`/v1`), and REST JSON (`/decide`). Ideal for multi-agent fleets (Claude Code, Antigravity CLI, LiteLLM) on a shared host or network.
+2. **Embedded In-Process Engine (Node.js / TypeScript via [`@receptron/laya`](https://github.com/receptron/laya))**: Self-contained library running via ONNX Runtime inside the calling process. Ideal for single-binary CLI tools, batch scripts, and Node services requiring **zero Python runtime** and zero daemon lifecycle management.
+
+### Daemon Deployment Architecture
 
 ```mermaid
 flowchart TD
@@ -90,6 +92,15 @@ flowchart TD
     MCP_SVR --> ENGINE
     OAI_SVR --> ENGINE
     REST_SVR --> ENGINE
+```
+
+### In-Process Embedded Architecture (Node.js / TypeScript)
+
+```mermaid
+flowchart LR
+    Caller["Node.js / TypeScript Application\n(CLI Pipeline, Worker, Automation Script)"] -->|"import { Laya } from '@receptron/laya'"| Lib["@receptron/laya Library"]
+    Lib -->|"Direct In-Process Call\n(Zero network round-trip)"| ORT["ONNX Runtime Engine (C++ bindings)\nResident Model: ~1.7 GB ONNX"]
+    ORT -->|"Single Bidirectional Pass (~35ms CPU)"| Output["Typed Result\n(ChoiceAnswer, NoulAnswer, ScoreAnswer)"]
 ```
 
 ---
@@ -138,6 +149,10 @@ Because Laya does not perform autoregressive generation, its computational profi
 | **Hardware Requirement** | Dedicated GPU (16GB–48GB VRAM) | Mid-range GPU or slow CPU | **Standard x86/ARM CPU** (0 GPU required) |
 | **Single Forward Pass Latency** | 3,000 – 15,000 ms (serial streaming) | 800 – 3,000 ms | **~25 – 45 ms** |
 | **Thermal / Power Impact** | 100W – 350W sustained | 45W – 100W sustained | **2W – 10W** (Brief single-core burst) |
+
+> [!NOTE] Runtime Variations
+> - **Python Track (PyTorch FP16)**: Resident memory ~842 MB RAM, unquantized FP16 weights (~800 MB on disk). Minimal memory footprint for persistent background daemons.
+> - **Node.js Track (ONNX Runtime FP32)**: Resident memory ~2.0 GB RAM, unquantized FP32 ONNX graph (~1.7 GB on disk). Slightly higher memory allocation, but runs natively in Node.js with **zero Python or PyTorch dependencies**.
 
 ---
 
