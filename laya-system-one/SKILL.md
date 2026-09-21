@@ -23,7 +23,9 @@ While traditional Large Language Models (Gemini Pro, Claude 3.7, Qwen 35B) are *
 Laya evaluates state in a **single forward pass** on standard CPU in **~35ms**, consuming **~842 MB RAM** at FP16. Code owns the workflow; Laya provides the programmable common sense.
 
 ### Origins, Context & Acknowledgements
-This skill and architectural pattern are inspired by **TypeSafe AI's Jev** (the flagship System 1 decision model pioneered by Diogo Almeida, Erik Gafni, and Sasha Sheng; see their canonical skill at [typesafe-ai/skills](https://github.com/typesafe-ai/skills/blob/main/skills/typesafe-ai/SKILL.md)) and Daniel Kahneman's dual-process cognitive framework (*Thinking, Fast and Slow*). 
+The **Laya Python library** (`pip install laya`) and the `convaiinnovations/laya` model family were created by **[NandhaKishorM](https://github.com/NandhaKishorM/laya)** — trained with Reinforcement Learning from Calibrated Decisions (RLCD) against strictly proper scoring rules. He built non-autoregressive typed decision models *before* frontier labs gave the pattern a name. This skill is built directly on top of his open-weights work.
+
+The skill's agent-integration pattern and the System 1 / System 2 framing are further inspired by **TypeSafe AI's Jev** (the cloud-managed decision service pioneered by Diogo Almeida, Erik Gafni, and Sasha Sheng; see [typesafe-ai/skills](https://github.com/typesafe-ai/skills/blob/main/skills/typesafe-ai/SKILL.md)) and Daniel Kahneman's dual-process cognitive framework (*Thinking, Fast and Slow*).
 
 With TypeSafe dropping Jev's waitlist and offering a $5 trial credit, System 1 decision heads are rapidly becoming the standard interface for agent routing. **Laya** serves as the self-hosted, open-weights complement for environments demanding full local sovereignty and true zero-token economics:
 

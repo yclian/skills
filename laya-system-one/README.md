@@ -170,6 +170,12 @@ curl -X POST http://localhost:8500/decide \
 ---
 
 ## Acknowledgements & Ecosystem
-Inspired by **TypeSafe AI's Jev** ([typesafe-ai/skills](https://github.com/typesafe-ai/skills)) and Daniel Kahneman's dual-process cognitive architecture (*Thinking, Fast and Slow*).
-* Choose **TypeSafe Jev** for cloud-managed scale with zero infra maintenance.
-* Choose **Laya** for 100% self-hosted sovereignty, zero data egress, and $0.00 token cost on standard CPU hardware.
+
+**[NandhaKishorM](https://github.com/NandhaKishorM/laya)** — the original creator of the Laya Python library (`pip install laya`), the `convaiinnovations/laya` HuggingFace model family, and the RLCD training methodology that makes non-autoregressive typed decisions possible. This skill is built directly on top of his work. He built this *before* TypeSafe called it System 1.
+
+**[TypeSafe AI's Jev](https://github.com/typesafe-ai/skills)** — the cloud-managed System 1 decision service that popularized the paradigm. Inspired by Daniel Kahneman's dual-process cognitive framework (*Thinking, Fast and Slow*).
+
+**[@receptron/laya](https://github.com/receptron/laya)** — Node.js/TypeScript ONNX runtime port for zero-Python in-process execution.
+
+* Choose **NandhaKishorM's Laya** (this skill) for 100% self-hosted sovereignty, zero data egress, and $0.00 token cost on standard CPU.
+* Choose **TypeSafe Jev** for instant cloud-managed scale with zero infrastructure setup.
