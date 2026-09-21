@@ -123,6 +123,22 @@ curl -s https://<your-host>.ts.net/stats | jq .
 
 ---
 
+## 4. Confidence-Driven Escalation Across Agent Harnesses
+
+How do agent harnesses (**Antigravity**, **Claude Code**, and **OpenCode**) behave when evaluating Laya's calibrated confidence score?
+
+| Confidence Tier | Cloud LLM Called? | Antigravity (Gemini) | Claude Code (Anthropic) | OpenCode (Local / Cloud) |
+| :--- | :---: | :--- | :--- | :--- |
+| **High ($\ge 0.75$)** | **No** (0 tokens) | Accepts choice immediately; skips internal reasoning turns and executes. | Accepts choice immediately; skips multi-turn reasoning and proceeds. | Resolves task step locally; bypasses LLM prompt queue entirely. |
+| **Mid ($0.50–0.74$)** | **Harness decides** | Low-stakes: accepts. High-stakes: spawns subagent (`Model: 'flash'` or `'pro'`). | Low-stakes: accepts. High-stakes: triggers extended thinking or subagent review. | Shunts payload to fast speculative tier (e.g. local Qwen coder or cheap cloud model). |
+| **Low ($0.25–0.49$)** | **Yes (System 2)** | Detects competing options; escalates to **Gemini Pro** (`invoke_subagent(Model: 'pro')`). | Detects ambiguity; escalates to **Claude Sonnet / Opus** with deep reasoning enabled. | Routes payload to primary frontier reasoning tier (Gemini Pro / Sonnet). |
+| **Bad ($< 0.25$)** | **Human Prompted** | **Ambiguity Tripwire**. Halts execution and fires `ask_question` modal. | **Ambiguity Tripwire**. Halts execution and prompts human via interactive CLI. | Emits an execution breakpoint in OpenCode UI/terminal requiring human selection. |
+
+> **Autonomous Gateway Mode (LiteLLM / Cron)**:  
+> When run headlessly behind LiteLLM (`model="laya-decision"`), **High** returns the typed JSON choice in ~35ms with zero cloud egress ($0.00). **Mid** routes to fast models (`gemini-flash`), **Low** escalates to deep models (`gemini-pro`), and **Bad** flags an alert (e.g. Telegram via Hermes) for human confirmation.
+
+---
+
 ## Quick Test Verification
 
 Test your running server with a single REST call:
