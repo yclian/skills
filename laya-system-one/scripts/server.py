@@ -11,8 +11,11 @@ Endpoints:
 import os
 import json
 import time
+import datetime
 import logging
 import contextlib
+from collections import Counter, deque
+from threading import Lock
 from typing import Any, Dict, List, Optional, Union
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,6 +36,49 @@ mcp = MCPServer("laya")
 
 # Global Laya agent
 agent: Optional[laya.Agent] = None
+
+# Stats and Observability Tracking
+stats_lock = Lock()
+STATS: Dict[str, Any] = {
+    "start_time": time.time(),
+    "total_decisions": 0,
+    "total_latency_ms": 0.0,
+    "by_tool": Counter(),
+    "by_choice": Counter(),
+    "recent_decisions": deque(maxlen=50)
+}
+
+def record_decision(
+    tool: str,
+    input_text: Union[str, Any],
+    choice: Any,
+    confidence: Optional[float],
+    latency_ms: float
+):
+    """Log structured decision and record runtime metrics."""
+    input_summary = str(input_text).strip().replace("\n", " ")
+    if len(input_summary) > 80:
+        input_summary = input_summary[:77] + "..."
+    
+    conf_str = f"conf={confidence:.2f}" if confidence is not None else "conf=n/a"
+    logger.info("⚡ [%s] choice='%s' %s latency=%.1fms | input='%s'", tool, choice, conf_str, latency_ms, input_summary)
+    
+    entry = {
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "tool": tool,
+        "choice": str(choice),
+        "confidence": round(confidence, 4) if confidence is not None else None,
+        "latency_ms": round(latency_ms, 2),
+        "input": input_summary
+    }
+    
+    with stats_lock:
+        STATS["total_decisions"] += 1
+        STATS["total_latency_ms"] += latency_ms
+        STATS["by_tool"][tool] += 1
+        if choice is not None:
+            STATS["by_choice"][str(choice)] += 1
+        STATS["recent_decisions"].append(entry)
 
 def _scrub(text: str) -> str:
     """Neutralize [MASK] injection attacks before tokenization."""
@@ -61,12 +107,17 @@ def laya_classify(
                 "criteria": categories
             }
         }
+        t0 = time.time()
         res = agent.predict(_scrub(item), q)
+        latency_ms = (time.time() - t0) * 1000
         ans = res.get("answers", {}).get("cat", {})
+        choice = ans.get("choice")
+        conf = ans.get("confidence")
+        record_decision("laya_classify", item, choice, conf, latency_ms)
         results.append({
             "item": item,
-            "category": ans.get("choice"),
-            "confidence": ans.get("confidence"),
+            "category": choice,
+            "confidence": conf,
             "probabilities": ans.get("probabilities", {})
         })
     return results
@@ -91,11 +142,16 @@ def laya_decide(
             "criteria": options
         }
     }
+    t0 = time.time()
     res = agent.predict(_scrub(text), q)
+    latency_ms = (time.time() - t0) * 1000
     ans = res.get("answers", {}).get("decision", {})
+    choice = ans.get("choice")
+    conf = ans.get("confidence")
+    record_decision("laya_decide", text, choice, conf, latency_ms)
     return {
-        "choice": ans.get("choice"),
-        "confidence": ans.get("confidence"),
+        "choice": choice,
+        "confidence": conf,
         "probabilities": ans.get("probabilities", {})
     }
 
@@ -117,12 +173,19 @@ def laya_noul(
             "instructions": condition
         }
     }
+    t0 = time.time()
     res = agent.predict(_scrub(text), q)
+    latency_ms = (time.time() - t0) * 1000
     ans = res.get("answers", {}).get("condition", {})
+    prob = ans.get("noul", 0.0)
+    conf = ans.get("confidence")
+    passes = (prob >= 0.80)
+    choice = f"YES ({prob:.2f})" if passes else f"NO ({prob:.2f})"
+    record_decision("laya_noul", f"{condition} | {text}", choice, conf, latency_ms)
     return {
-        "yes_probability": ans.get("noul"),
-        "confidence": ans.get("confidence"),
-        "passes_threshold_80": (ans.get("noul", 0.0) >= 0.80)
+        "yes_probability": prob,
+        "confidence": conf,
+        "passes_threshold_80": passes
     }
 
 # MCP Tool: laya_score
@@ -145,11 +208,16 @@ def laya_score(
             "criteria": levels
         }
     }
+    t0 = time.time()
     res = agent.predict(_scrub(text), q)
+    latency_ms = (time.time() - t0) * 1000
     ans = res.get("answers", {}).get("metric", {})
+    score = ans.get("score")
+    conf = ans.get("confidence")
+    record_decision("laya_score", f"{instructions} | {text}", f"score={score}", conf, latency_ms)
     return {
-        "expected_score": ans.get("score"),
-        "confidence": ans.get("confidence"),
+        "expected_score": score,
+        "confidence": conf,
         "probabilities": ans.get("probabilities", {}),
         "legend": ans.get("legend", {})
     }
@@ -169,8 +237,11 @@ def laya_eval(
     clean_state = _scrub(state) if isinstance(state, str) else state
     t0 = time.time()
     res = agent.predict(clean_state, questions)
+    latency_ms = (time.time() - t0) * 1000
+    answers = res.get("answers", {})
+    record_decision("laya_eval", str(state), f"{len(questions)} questions", 1.0, latency_ms)
     return {
-        "answers": res.get("answers", {}),
+        "answers": answers,
         "usage": res.get("usage", {})
     }
 
@@ -209,9 +280,13 @@ def laya_triage_error(
     clean_context = _scrub(context) if context else None
     input_text = f"Context: {clean_context}\nError:\n{clean_trace}" if clean_context else clean_trace
 
+    t0 = time.time()
     res = agent.predict(input_text, q)
+    latency_ms = (time.time() - t0) * 1000
     ans = res.get("answers", {}).get("defect", {})
     defect_type = ans.get("choice", "LOGIC_OR_ASSERTION")
+    conf = ans.get("confidence")
+    record_decision("laya_triage_error", clean_trace[-60:], defect_type, conf, latency_ms)
     
     # Prescriptive recommendations
     action_map = {
@@ -256,13 +331,44 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
+    total = STATS["total_decisions"]
     return {
         "status": "healthy",
         "model": "convaiinnovations/laya",
         "backbone": "ModernBERT-large (395M)",
         "device": "cpu",
-        "ready": agent is not None
+        "ready": agent is not None,
+        "uptime_seconds": round(time.time() - STATS["start_time"], 1),
+        "total_decisions": total
     }
+
+@app.get("/stats")
+def stats():
+    """Return runtime inference counts, latency benchmarks, and rolling decision history."""
+    uptime_sec = round(time.time() - STATS["start_time"], 1)
+    total = STATS["total_decisions"]
+    avg_lat = round(STATS["total_latency_ms"] / total, 2) if total > 0 else 0.0
+    with stats_lock:
+        return {
+            "uptime_seconds": uptime_sec,
+            "total_decisions": total,
+            "avg_latency_ms": avg_lat,
+            "by_tool": dict(STATS["by_tool"]),
+            "by_choice": dict(STATS["by_choice"].most_common(25)),
+            "recent_decisions": list(STATS["recent_decisions"])
+        }
+
+@app.post("/stats/reset")
+def reset_stats():
+    """Reset the in-memory decision counters and rolling history."""
+    with stats_lock:
+        STATS["start_time"] = time.time()
+        STATS["total_decisions"] = 0
+        STATS["total_latency_ms"] = 0.0
+        STATS["by_tool"].clear()
+        STATS["by_choice"].clear()
+        STATS["recent_decisions"].clear()
+    return {"status": "reset", "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()}
 
 class DirectDecideRequest(BaseModel):
     text: Union[str, dict, list]
@@ -288,8 +394,12 @@ def direct_decide(req: DirectDecideRequest):
     input_data = _scrub(req.text) if isinstance(req.text, str) else req.text
     res = agent.predict(input_data, q)
     latency_ms = (time.time() - t0) * 1000
+    answers = res.get("answers", {})
+    choice = answers.get("decision", {}).get("choice") or str(answers)[:40]
+    conf = answers.get("decision", {}).get("confidence")
+    record_decision("rest_decide", str(req.text), choice, conf, latency_ms)
     return {
-        "answers": res.get("answers", {}),
+        "answers": answers,
         "latency_ms": round(latency_ms, 2)
     }
 
@@ -328,10 +438,13 @@ async def chat_completions(request: Request):
     res = agent.predict(_scrub(full_text), q)
     latency_ms = (time.time() - t0) * 1000
     ans = res.get("answers", {}).get("routing", {})
+    choice = ans.get("choice", "FAST_DECISION")
+    conf = ans.get("confidence", 1.0)
+    record_decision("v1_chat_completions", full_text, choice, conf, latency_ms)
     
     out_payload = json.dumps({
-        "choice": ans.get("choice", "FAST_DECISION"),
-        "confidence": ans.get("confidence", 1.0),
+        "choice": choice,
+        "confidence": conf,
         "latency_ms": round(latency_ms, 2),
         "probabilities": ans.get("probabilities", {})
     })
