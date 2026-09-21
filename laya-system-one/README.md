@@ -137,6 +137,27 @@ How do agent harnesses (**Antigravity**, **Claude Code**, and **OpenCode**) beha
 > **Autonomous Gateway Mode (LiteLLM / Cron)**:  
 > When run headlessly behind LiteLLM (`model="laya-decision"`), **High** returns the typed JSON choice in ~35ms with zero cloud egress ($0.00). **Mid** routes to fast models (`gemini-flash`), **Low** escalates to deep models (`gemini-pro`), and **Bad** flags an alert (e.g. Telegram via Hermes) for human confirmation.
 
+### ⚠️ Laya is a sub-decision tool, not a task router
+
+**Laya does not intercept or replace the primary LLM invocation.** The agent harness (Antigravity, Claude Code, OpenCode) always fires its LLM for task planning and execution. Laya is called *mid-execution* for specific semantic judgments within that flow — saving tokens on those sub-calls, not on the task itself.
+
+**Example — sysadmin task:**
+```
+You → "Find all failed logins in the last 24h and kill those sessions"
+         ↓
+  Antigravity / Claude Code (Gemini / Claude) ← always fires
+         ↓
+  LLM plans: grep auth.log | awk ... | xargs kill
+         ↓
+  Mid-execution, LLM calls Laya for sub-decisions:
+    laya_classify("SSH_TIMEOUT vs WRONG_PASSWORD vs AUTH_FAIL") → HIGH (35ms, $0.00)
+    laya_triage_error("sshd[1234]: error: ...")               → HIGH (35ms, $0.00)
+         ↓
+  LLM executes the shell commands
+```
+
+To bypass the LLM at the **task level**, you need a custom pre-LLM router that intercepts the prompt, calls `laya_classify` on the intent, and dispatches to a deterministic handler on high confidence. That is a separate architectural pattern not provided out of the box by any current agent harness.
+
 ---
 
 ## Quick Test Verification
