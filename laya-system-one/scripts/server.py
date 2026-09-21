@@ -45,8 +45,22 @@ STATS: Dict[str, Any] = {
     "total_latency_ms": 0.0,
     "by_tool": Counter(),
     "by_choice": Counter(),
+    "by_tier": Counter(),
     "recent_decisions": deque(maxlen=50)
 }
+
+def get_confidence_tier(confidence: Optional[float]) -> str:
+    """Map calibrated confidence score to routing tier."""
+    if confidence is None:
+        return "unscored"
+    if confidence >= 0.75:
+        return "high_local"
+    elif confidence >= 0.50:
+        return "mid_cheap_rag"
+    elif confidence >= 0.25:
+        return "low_deep_reasoning"
+    else:
+        return "bad_human_escalation"
 
 def record_decision(
     tool: str,
@@ -60,7 +74,8 @@ def record_decision(
     if len(input_summary) > 80:
         input_summary = input_summary[:77] + "..."
     
-    conf_str = f"conf={confidence:.2f}" if confidence is not None else "conf=n/a"
+    tier = get_confidence_tier(confidence)
+    conf_str = f"conf={confidence:.2f} tier={tier}" if confidence is not None else "conf=n/a tier=unscored"
     logger.info("⚡ [%s] choice='%s' %s latency=%.1fms | input='%s'", tool, choice, conf_str, latency_ms, input_summary)
     
     entry = {
@@ -68,6 +83,7 @@ def record_decision(
         "tool": tool,
         "choice": str(choice),
         "confidence": round(confidence, 4) if confidence is not None else None,
+        "tier": tier,
         "latency_ms": round(latency_ms, 2),
         "input": input_summary
     }
@@ -76,6 +92,7 @@ def record_decision(
         STATS["total_decisions"] += 1
         STATS["total_latency_ms"] += latency_ms
         STATS["by_tool"][tool] += 1
+        STATS["by_tier"][tier] += 1
         if choice is not None:
             STATS["by_choice"][str(choice)] += 1
         STATS["recent_decisions"].append(entry)
@@ -344,15 +361,68 @@ def health():
 
 @app.get("/stats")
 def stats():
-    """Return runtime inference counts, latency benchmarks, and rolling decision history."""
+    """Return runtime inference counts, latency benchmarks, confidence tier distributions, and rolling history."""
     uptime_sec = round(time.time() - STATS["start_time"], 1)
     total = STATS["total_decisions"]
     avg_lat = round(STATS["total_latency_ms"] / total, 2) if total > 0 else 0.0
     with stats_lock:
+        tiers = STATS["by_tier"]
+        high = tiers["high_local"]
+        mid = tiers["mid_cheap_rag"]
+        low = tiers["low_deep_reasoning"]
+        bad = tiers["bad_human_escalation"]
+        unscored = tiers["unscored"]
+        
+        def pct(c: int) -> str:
+            return f"{(c / total * 100):.1f}%" if total > 0 else "0.0%"
+            
+        routing_summary = {
+            "system_1_resolved_pct": pct(high),
+            "system_2_cheap_rag_pct": pct(mid),
+            "system_2_deep_reasoning_pct": pct(low),
+            "human_escalation_pct": pct(bad)
+        }
+        
+        confidence_tiers = {
+            "high_local": {
+                "threshold": ">= 0.75",
+                "action": "Local System 1 (ModernBERT CPU)",
+                "count": high,
+                "percentage": pct(high)
+            },
+            "mid_cheap_rag": {
+                "threshold": "0.50 - 0.74",
+                "action": "Fast Cloud / Speculative RAG (Flash / Qwen 35B)",
+                "count": mid,
+                "percentage": pct(mid)
+            },
+            "low_deep_reasoning": {
+                "threshold": "0.25 - 0.49",
+                "action": "Deep System 2 (Gemini Pro / Claude Sonnet)",
+                "count": low,
+                "percentage": pct(low)
+            },
+            "bad_human_escalation": {
+                "threshold": "< 0.25",
+                "action": "Human Escalation / Ambiguity Tripwire",
+                "count": bad,
+                "percentage": pct(bad)
+            }
+        }
+        if unscored > 0:
+            confidence_tiers["unscored"] = {
+                "threshold": "n/a",
+                "action": "Unscored / Direct REST",
+                "count": unscored,
+                "percentage": pct(unscored)
+            }
+
         return {
             "uptime_seconds": uptime_sec,
             "total_decisions": total,
             "avg_latency_ms": avg_lat,
+            "routing_summary": routing_summary,
+            "confidence_tiers": confidence_tiers,
             "by_tool": dict(STATS["by_tool"]),
             "by_choice": dict(STATS["by_choice"].most_common(25)),
             "recent_decisions": list(STATS["recent_decisions"])
@@ -367,6 +437,7 @@ def reset_stats():
         STATS["total_latency_ms"] = 0.0
         STATS["by_tool"].clear()
         STATS["by_choice"].clear()
+        STATS["by_tier"].clear()
         STATS["recent_decisions"].clear()
     return {"status": "reset", "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()}
 
