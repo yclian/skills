@@ -2,11 +2,12 @@
 name: laya-system-one
 license: MIT
 description: >
-  Local, non-autoregressive "System 1" decision engine powered by ModernBERT-large (395M).
-  Delivers typed judgments (Choice, Noul, Score) in ~35ms on standard CPU ($0.00 token cost).
-  Use whenever handling bulk classification, category sorting, routing, or diagnosing
-  execution tracebacks/errors. Triggers include: "triage error", "classify items",
-  "sort categories", "route request", "fast decision", or diagnosing stack traces.
+  Build high-speed, zero-token software with Laya: a local non-autoregressive
+  "System 1" decision engine powered by ModernBERT-large (395M). Delivers typed
+  judgments (Choice, Noul, Score) in ~35ms on standard CPU ($0.00 token cost).
+  Use when designing or writing code for fast semantic routing, bulk event/email
+  filtering, data classification pipelines, error triage, or when replacing an
+  expensive LLM prompt-and-parse step with a local machine-native decision head.
 ---
 
 # Laya: Local System 1 Decision Engine
