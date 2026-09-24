@@ -69,80 +69,85 @@ def record_decision(
     confidence: Optional[float],
     latency_ms: float
 ):
-    """Update running metrics in-memory and write structured decision log to journald."""
+    """Log structured decision and record runtime metrics."""
+    input_summary = str(input_text).strip().replace("\n", " ")
+    if len(input_summary) > 80:
+        input_summary = input_summary[:77] + "..."
+    
     tier = get_confidence_tier(confidence)
+    conf_str = f"conf={confidence:.2f} tier={tier}" if confidence is not None else "conf=n/a tier=unscored"
+    logger.info("⚡ [%s] choice='%s' %s latency=%.1fms | input='%s'", tool, choice, conf_str, latency_ms, input_summary)
+    
+    entry = {
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "tool": tool,
+        "choice": str(choice),
+        "confidence": round(confidence, 4) if confidence is not None else None,
+        "tier": tier,
+        "latency_ms": round(latency_ms, 2),
+        "input": input_summary
+    }
+    
     with stats_lock:
         STATS["total_decisions"] += 1
         STATS["total_latency_ms"] += latency_ms
         STATS["by_tool"][tool] += 1
-        STATS["by_choice"][str(choice)] += 1
         STATS["by_tier"][tier] += 1
-        
-        # Keep ring buffer of last 50 decisions
-        STATS["recent_decisions"].append({
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "tool": tool,
-            "choice": choice,
-            "confidence": round(confidence, 4) if confidence is not None else None,
-            "tier": tier,
-            "latency_ms": round(latency_ms, 2),
-            "input": str(input_text)[:120]
-        })
-    
-    # Structured one-line log for journalctl / tailscale observability
-    conf_str = f"conf={confidence:.2f}" if confidence is not None else "conf=None"
-    tier_str = f"tier={tier}"
-    clean_inp = str(input_text).replace("\n", " ")[:90]
-    logger.info(f"⚡ [{tool}] choice='{choice}' {conf_str} {tier_str} latency={latency_ms:.1f}ms | input='{clean_inp}'")
+        if choice is not None:
+            STATS["by_choice"][str(choice)] += 1
+        STATS["recent_decisions"].append(entry)
 
-def _scrub(text: Any) -> Any:
-    """Strip [MASK] or special syntax to avoid injection into ModernBERT's MLM heads."""
-    if isinstance(text, str):
-        return text.replace("[MASK]", " ").replace("<mask>", " ")
-    return text
+def _scrub(text: str) -> str:
+    """Neutralize [MASK] injection attacks before tokenization."""
+    return text.replace("[MASK]", " ") if text else ""
 
 # MCP Tool: laya_classify
 @mcp.tool()
 def laya_classify(
-    text: str,
-    options: List[str],
-    instructions: str = "Classify the text into exactly one category."
-) -> Dict[str, Any]:
-    """Classify text into a simple list of candidate labels in 35ms.
-    Returns the predicted choice, calibrated confidence score, and probability distribution.
+    items: List[str],
+    categories: Dict[str, str],
+    instructions: str = "Classify each item into the best matching category."
+) -> List[Dict[str, Any]]:
+    """Ultra-fast (~35ms) non-autoregressive classifier powered by ModernBERT.
+    Use this tool FIRST for bulk triage, categorization, and sorting tasks
+    (emails, commit messages, log lines, candidates) without burning LLM tokens.
     """
     if agent is None:
         raise RuntimeError("Laya model not ready")
     
-    q = {
-        "category": {
-            "type": "choice",
-            "instructions": instructions,
-            "criteria": {opt: opt for opt in options}
+    results = []
+    for item in items:
+        q = {
+            "cat": {
+                "type": "choice",
+                "instructions": instructions,
+                "criteria": categories
+            }
         }
-    }
-    t0 = time.time()
-    res = agent.predict(_scrub(text), q)
-    latency_ms = (time.time() - t0) * 1000
-    ans = res.get("answers", {}).get("category", {})
-    choice = ans.get("choice")
-    conf = ans.get("confidence")
-    record_decision("laya_classify", text, choice, conf, latency_ms)
-    return {
-        "choice": choice,
-        "confidence": conf,
-        "probabilities": ans.get("probabilities", {})
-    }
+        t0 = time.time()
+        res = agent.predict(_scrub(item), q)
+        latency_ms = (time.time() - t0) * 1000
+        ans = res.get("answers", {}).get("cat", {})
+        choice = ans.get("choice")
+        conf = ans.get("confidence")
+        record_decision("laya_classify", item, choice, conf, latency_ms)
+        results.append({
+            "item": item,
+            "category": choice,
+            "confidence": conf,
+            "probabilities": ans.get("probabilities", {})
+        })
+    return results
 
 # MCP Tool: laya_decide
 @mcp.tool()
 def laya_decide(
     text: str,
     options: Dict[str, str],
-    instructions: str = "Select the best matching option based on the criteria."
+    instructions: str = "Select the optimal choice for this input."
 ) -> Dict[str, Any]:
-    """Semantic routing and decision making over detailed candidate options.
-    Options is a dictionary mapping option_key -> description/criteria.
+    """Execute a single calibrated decision across an input text in ~35ms.
+    Returns typed choice, calibrated confidence score, and probability distribution.
     """
     if agent is None:
         raise RuntimeError("Laya model not ready")
@@ -173,8 +178,8 @@ def laya_noul(
     text: str,
     condition: str
 ) -> Dict[str, Any]:
-    """Calibrated probability evaluation (0.0 to 1.0) of whether a condition is TRUE.
-    Native implementation of Kahneman's fast intuitive true/false check.
+    """Evaluate a yes/no condition using calibrated probability (0.0 to 1.0).
+    Ideal for binary gates, compliance checks, or trigger filters without competing options.
     """
     if agent is None:
         raise RuntimeError("Laya model not ready")
@@ -417,7 +422,6 @@ async def lifespan(fastapi_app: FastAPI):
 # Main FastAPI App
 app = FastAPI(title="Laya Decision Service", version="1.0.0", lifespan=lifespan)
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -426,102 +430,91 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount MCP endpoint
-app.mount("/mcp", mcp.streamable_http_app(transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False)))
-
-# REST Request Models
-class DecideRequest(BaseModel):
-    text: Optional[str] = None
-    state: Optional[Union[str, Dict[str, Any]]] = None
-    questions: Optional[Dict[str, Any]] = None
-    options: Optional[Dict[str, str]] = None
-    instructions: Optional[str] = None
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-class ChatCompletionRequest(BaseModel):
-    model: str
-    messages: List[ChatMessage]
-    temperature: Optional[float] = 0.0
-    max_tokens: Optional[int] = 100
-
 @app.get("/health")
 def health():
-    uptime = time.time() - STATS["start_time"]
+    total = STATS["total_decisions"]
     return {
         "status": "healthy",
         "model": "convaiinnovations/laya",
         "backbone": "ModernBERT-large (395M)",
         "device": "cpu",
         "ready": agent is not None,
-        "uptime_seconds": round(uptime, 1),
-        "total_decisions": STATS["total_decisions"]
+        "uptime_seconds": round(time.time() - STATS["start_time"], 1),
+        "total_decisions": total
     }
 
 @app.get("/stats")
-def get_stats():
-    """Live telemetry stats on total inferences, avg latency, and 4-tier routing summary."""
+def stats():
+    """Return runtime inference counts, latency benchmarks, confidence tier distributions, and rolling history."""
+    uptime_sec = round(time.time() - STATS["start_time"], 1)
+    total = STATS["total_decisions"]
+    avg_lat = round(STATS["total_latency_ms"] / total, 2) if total > 0 else 0.0
     with stats_lock:
-        uptime = time.time() - STATS["start_time"]
-        total = STATS["total_decisions"]
-        avg_latency = (STATS["total_latency_ms"] / total) if total > 0 else 0.0
+        tiers = STATS["by_tier"]
+        high = tiers["high_local"]
+        mid = tiers["mid_cheap_rag"]
+        low = tiers["low_deep_reasoning"]
+        bad = tiers["bad_human_escalation"]
+        unscored = tiers["unscored"]
         
-        tier_high = STATS["by_tier"]["high_local"]
-        tier_mid = STATS["by_tier"]["mid_cheap_rag"]
-        tier_low = STATS["by_tier"]["low_deep_reasoning"]
-        tier_bad = STATS["by_tier"]["bad_human_escalation"]
+        def pct(c: int) -> str:
+            return f"{(c / total * 100):.1f}%" if total > 0 else "0.0%"
+            
+        routing_summary = {
+            "system_1_resolved_pct": pct(high),
+            "system_2_cheap_rag_pct": pct(mid),
+            "system_2_deep_reasoning_pct": pct(low),
+            "human_escalation_pct": pct(bad)
+        }
         
-        pct_high = f"{(tier_high / total * 100):.1f}%" if total > 0 else "0.0%"
-        pct_mid = f"{(tier_mid / total * 100):.1f}%" if total > 0 else "0.0%"
-        pct_low = f"{(tier_low / total * 100):.1f}%" if total > 0 else "0.0%"
-        pct_bad = f"{(tier_bad / total * 100):.1f}%" if total > 0 else "0.0%"
-        
+        confidence_tiers = {
+            "high_local": {
+                "threshold": ">= 0.75",
+                "action": "Local System 1 (ModernBERT CPU)",
+                "count": high,
+                "percentage": pct(high)
+            },
+            "mid_cheap_rag": {
+                "threshold": "0.50 - 0.74",
+                "action": "Fast Cloud / Speculative RAG (Flash / Qwen 35B)",
+                "count": mid,
+                "percentage": pct(mid)
+            },
+            "low_deep_reasoning": {
+                "threshold": "0.25 - 0.49",
+                "action": "Deep System 2 (Gemini Pro / Claude Sonnet)",
+                "count": low,
+                "percentage": pct(low)
+            },
+            "bad_human_escalation": {
+                "threshold": "< 0.25",
+                "action": "Human Escalation / Ambiguity Tripwire",
+                "count": bad,
+                "percentage": pct(bad)
+            }
+        }
+        if unscored > 0:
+            confidence_tiers["unscored"] = {
+                "threshold": "n/a",
+                "action": "Unscored / Direct REST",
+                "count": unscored,
+                "percentage": pct(unscored)
+            }
+
         return {
-            "uptime_seconds": round(uptime, 1),
+            "uptime_seconds": uptime_sec,
             "total_decisions": total,
-            "avg_latency_ms": round(avg_latency, 2),
-            "routing_summary": {
-                "system_1_resolved_pct": pct_high,
-                "system_2_cheap_rag_pct": pct_mid,
-                "system_2_deep_reasoning_pct": pct_low,
-                "human_escalation_pct": pct_bad
-            },
-            "confidence_tiers": {
-                "high_local": {
-                    "threshold": ">= 0.75",
-                    "action": "Local System 1 (ModernBERT CPU)",
-                    "count": tier_high,
-                    "percentage": pct_high
-                },
-                "mid_cheap_rag": {
-                    "threshold": "0.50 - 0.74",
-                    "action": "Fast Cloud / Speculative RAG (Flash / Qwen 35B)",
-                    "count": tier_mid,
-                    "percentage": pct_mid
-                },
-                "low_deep_reasoning": {
-                    "threshold": "0.25 - 0.49",
-                    "action": "Deep System 2 (Gemini Pro / Claude Sonnet)",
-                    "count": tier_low,
-                    "percentage": pct_low
-                },
-                "bad_human_escalation": {
-                    "threshold": "< 0.25",
-                    "action": "Human Escalation / Ambiguity Tripwire",
-                    "count": tier_bad,
-                    "percentage": pct_bad
-                }
-            },
+            "avg_latency_ms": avg_lat,
+            "routing_summary": routing_summary,
+            "confidence_tiers": confidence_tiers,
             "by_tool": dict(STATS["by_tool"]),
-            "by_choice": dict(STATS["by_choice"]),
+            "by_choice": dict(STATS["by_choice"].most_common(25)),
             "recent_decisions": list(STATS["recent_decisions"])
         }
 
 @app.post("/stats/reset")
 def reset_stats():
-    """Reset live telemetry counters."""
+    """Reset the in-memory decision counters and rolling history."""
     with stats_lock:
         STATS["start_time"] = time.time()
         STATS["total_decisions"] = 0
@@ -530,120 +523,110 @@ def reset_stats():
         STATS["by_choice"].clear()
         STATS["by_tier"].clear()
         STATS["recent_decisions"].clear()
-    return {"status": "reset_successful"}
+    return {"status": "reset", "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+
+class DirectDecideRequest(BaseModel):
+    text: Union[str, dict, list]
+    options: Optional[Dict[str, str]] = None
+    instructions: Optional[str] = "Select the best matching option."
+    query: Optional[Dict[str, Any]] = None
 
 @app.post("/decide")
-def decide(req: DecideRequest):
-    """Direct REST decision endpoint compatible with both raw dict criteria and multi-question payloads."""
+def direct_decide(req: DirectDecideRequest):
     if agent is None:
-        raise HTTPException(status_code=503, detail="Laya model not ready")
-    
+        raise HTTPException(status_code=503, detail="Laya agent loading")
     t0 = time.time()
-    
-    # If questions dict provided, run native multi-question predict
-    if req.questions is not None:
-        state_payload = req.state if req.state is not None else (req.text or "")
-        clean_state = _scrub(state_payload) if isinstance(state_payload, str) else state_payload
-        res = agent.predict(clean_state, req.questions)
-        latency = (time.time() - t0) * 1000
-        record_decision("rest_decide_multi", str(state_payload), f"{len(req.questions)} questions", 1.0, latency)
-        return {
-            "answers": res.get("answers", {}),
-            "usage": res.get("usage", {}),
-            "latency_ms": round(latency, 2)
-        }
-    
-    # If options dict provided, formulate choice question
-    if req.options is not None:
-        text_payload = req.text if req.text is not None else str(req.state or "")
+    if req.query:
+        q = req.query
+    else:
         q = {
             "decision": {
                 "type": "choice",
-                "instructions": req.instructions or "Select the best matching option.",
-                "criteria": req.options
+                "instructions": req.instructions,
+                "criteria": req.options or {}
             }
         }
-        res = agent.predict(_scrub(text_payload), q)
-        latency = (time.time() - t0) * 1000
-        ans = res.get("answers", {}).get("decision", {})
-        choice = ans.get("choice")
-        conf = ans.get("confidence")
-        record_decision("rest_decide_choice", text_payload, choice, conf, latency)
-        return {
-            "answers": res.get("answers", {}),
-            "usage": res.get("usage", {}),
-            "latency_ms": round(latency, 2)
-        }
-    
-    raise HTTPException(status_code=400, detail="Must provide either 'questions' or 'options'")
+    input_data = _scrub(req.text) if isinstance(req.text, str) else req.text
+    res = agent.predict(input_data, q)
+    latency_ms = (time.time() - t0) * 1000
+    answers = res.get("answers", {})
+    choice = answers.get("decision", {}).get("choice") or str(answers)[:40]
+    conf = answers.get("decision", {}).get("confidence")
+    record_decision("rest_decide", str(req.text), choice, conf, latency_ms)
+    return {
+        "answers": answers,
+        "latency_ms": round(latency_ms, 2)
+    }
 
 @app.post("/v1/chat/completions")
-def chat_completions(req: ChatCompletionRequest):
-    """OpenAI-compatible chat completion endpoint so LiteLLM can route to Laya."""
+async def chat_completions(request: Request):
     if agent is None:
-        raise HTTPException(status_code=503, detail="Laya model not ready")
+        raise HTTPException(status_code=503, detail="Laya agent loading")
     
-    user_msg = next((m.content for m in reversed(req.messages) if m.role == "user"), "")
-    t0 = time.time()
-    clean_user_msg = _scrub(user_msg)
+    body = await request.json()
+    messages = body.get("messages", [])
+    model_name = body.get("model", "laya-decision")
     
-    # Try parsing user_msg as JSON for structured questions
-    parsed_json = None
-    try:
-        parsed_json = json.loads(clean_user_msg)
-    except Exception:
-        pass
+    system_text = ""
+    user_text = ""
+    for m in messages:
+        if m.get("role") == "system":
+            system_text = m.get("content", "")
+        elif m.get("role") == "user":
+            user_text = m.get("content", "")
+            
+    full_text = f"Context: {system_text}\nPrompt: {user_text}" if system_text else user_text
     
-    if isinstance(parsed_json, dict) and "questions" in parsed_json:
-        state = parsed_json.get("state", "")
-        questions = parsed_json["questions"]
-        res = agent.predict(_scrub(state) if isinstance(state, str) else state, questions)
-        content_out = json.dumps(res.get("answers", {}))
-        conf = 1.0
-        choice = f"{len(questions)} answers"
-    else:
-        # Default single-pass sentiment/intent classification
-        q = {
-            "intent": {
-                "type": "choice",
-                "instructions": "Classify the primary operational intent of the input.",
-                "criteria": {
-                    "QUERY": "User is asking a question or querying status",
-                    "ACTION": "User is instructing execution or running a command",
-                    "FEEDBACK": "User is providing evaluation, corrections, or comments",
-                    "UNCLEAR": "Ambiguous, conversational filler, or undefined request"
-                }
+    q = {
+        "routing": {
+            "type": "choice",
+            "instructions": "Classify the prompt for optimal model routing.",
+            "criteria": {
+                "FAST_DECISION": "Simple intent, classification, triage, formatting, short enum",
+                "ESCALATE_SYSTEM_2": "Complex coding, multi-file edits, architecture, deep reasoning",
+                "DROP_NOISE": "Automated alert noise, marketing drift, irrelevant background event"
             }
         }
-        res = agent.predict(clean_user_msg, q)
-        ans = res.get("answers", {}).get("intent", {})
-        choice = ans.get("choice", "QUERY")
-        conf = ans.get("confidence")
-        content_out = json.dumps({"intent": choice, "confidence": conf})
+    }
     
-    latency = (time.time() - t0) * 1000
-    record_decision("litellm_chat_completion", clean_user_msg, choice, conf, latency)
+    t0 = time.time()
+    res = agent.predict(_scrub(full_text), q)
+    latency_ms = (time.time() - t0) * 1000
+    ans = res.get("answers", {}).get("routing", {})
+    choice = ans.get("choice", "FAST_DECISION")
+    conf = ans.get("confidence", 1.0)
+    record_decision("v1_chat_completions", full_text, choice, conf, latency_ms)
+    
+    out_payload = json.dumps({
+        "choice": choice,
+        "confidence": conf,
+        "latency_ms": round(latency_ms, 2),
+        "probabilities": ans.get("probabilities", {})
+    })
     
     return {
         "id": f"chatcmpl-laya-{int(time.time())}",
         "object": "chat.completion",
         "created": int(time.time()),
-        "model": req.model,
-        "choices": [{
-            "index": 0,
-            "message": {
-                "role": "assistant",
-                "content": content_out
-            },
-            "finish_reason": "stop"
-        }],
+        "model": model_name,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": out_payload
+                },
+                "finish_reason": "stop"
+            }
+        ],
         "usage": {
-            "prompt_tokens": len(clean_user_msg.split()),
-            "completion_tokens": len(content_out.split()),
-            "total_tokens": len(clean_user_msg.split()) + len(content_out.split())
+            "prompt_tokens": len(full_text.split()),
+            "completion_tokens": len(out_payload.split()),
+            "total_tokens": len(full_text.split()) + len(out_payload.split())
         }
     }
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8500)
+# Mount MCP streamable HTTP application at root
+sec = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+mcp_app = mcp.streamable_http_app(transport_security=sec)
+app.mount("", mcp_app)

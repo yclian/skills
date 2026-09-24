@@ -42,7 +42,7 @@ echo "[3/5] Installing PyTorch (CPU-only, ultra-light) and Laya..."
     "torch>=2.1.0"
 
 "${INSTALL_DIR}/venv/bin/uv" pip install \
-    "laya>=0.3.4" \
+    "laya>=0.3.11" \
     "transformers>=4.40.0" \
     "fastapi>=0.110.0" \
     "uvicorn[standard]>=0.28.0" \

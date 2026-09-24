@@ -67,7 +67,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 mkdir -p /srv/laya && cd /srv/laya
 uv venv --python 3.10 venv
 ./venv/bin/uv pip install --index-url https://download.pytorch.org/whl/cpu torch>=2.1.0
-./venv/bin/uv pip install laya>=0.3.4 transformers>=4.40.0 fastapi>=0.110.0 uvicorn[standard] mcp>=1.2.0
+./venv/bin/uv pip install laya>=0.3.11 transformers>=4.40.0 fastapi>=0.110.0 uvicorn[standard] mcp>=1.2.0
 
 # 3. Deploy server & pre-load weights
 cp scripts/server.py /srv/laya/server.py
