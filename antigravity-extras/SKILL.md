@@ -1,6 +1,6 @@
 ---
 name: antigravity-extras
-description: Operational tribal knowledge, hidden internals, quirks, and runbooks for Google Antigravity / Antigravity 2.0 that the assistant does not natively know about itself. Covers persistent scheduled tasks (sidecars), application runtime lifecycle, profile architectures, and process quirks.
+description: Operational tribal knowledge, hidden internals, quirks, and runbooks for Google Antigravity / Antigravity 2.0 that the assistant does not natively know about itself. Covers persistent scheduled tasks (sidecars), browser automation (/browser) CDP boot-up and security quirks, application runtime lifecycle, profile architectures, and process quirks.
 allowed-tools:
   - run_command
   - view_file
@@ -113,14 +113,88 @@ On Windows, Antigravity splits state across `~/.gemini`:
 
 ---
 
-## 4. File Locks & Safe Operations
+## 4. Browser Automation (`/browser`): Chrome DevTools Protocol (CDP) & Profile Isolation Quirks
+
+### 4.1 Subagent Architecture
+When a user issues the `/browser` slash command, Antigravity spawns an autonomous subagent with `typeName: "browser"` (Role: `Browser Automation Agent`).
+The agent connects over Chrome DevTools Protocol (CDP) at `http://127.0.0.1:9222` to attach to open windows, capture screenshots, evaluate DOM selectors, and inspect network traffic.
+
+### 4.2 The Critical Pitfall: Chrome's Silent Security Suppression
+When booting Chrome for remote debugging, agents and developers frequently run:
+```bash
+chrome.exe --remote-debugging-port=9222
+```
+**Why it fails silently**:
+1. Chrome's Chromium security sandbox **refuses to open `--remote-debugging-port` on the default user profile directory** (`%LOCALAPPDATA%\Google\Chrome\User Data`).
+2. If another standard Chrome window is already open under that profile, or if launched without an explicit isolated profile directory, Chrome simply attaches to the existing process.
+3. To protect saved credentials, personal cookies, and OAuth tokens from local malware, Chrome **silently suppresses `--remote-debugging-port`**.
+4. A normal browser window appears, but port `9222` remains closed (`Connection refused`). Diagnostic checks (`Test-NetConnection -Port 9222` or `curl http://localhost:9222/json`) fail completely.
+
+### 4.3 The Solution: Mandatory `--user-data-dir`
+Chrome **strictly mandates** an isolated profile directory to activate remote debugging:
+```powershell
+& "C:\Program Files\Google\Chrome Beta\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="$HOME\.chrome-debug"
+```
+- **Process Isolation**: Spawns an independent process tree that binds `127.0.0.1:9222` immediately.
+- **Session Persistence**: Because `$HOME\.chrome-debug` is persistent on disk, logins (e.g. store admin dashboards, SaaS apps) completed inside this window are preserved across sessions. You only need to authenticate once.
+
+### 4.4 Binary Selection: Chrome Beta vs. Chrome Stable
+In many developer environments, **Chrome Beta** is preferred for debugging and testing to keep developer tools and experimental configurations separate from standard browsing:
+- **Chrome Beta (Windows)**: `C:\Program Files\Google\Chrome Beta\Application\chrome.exe`
+- **Chrome Stable (Windows)**: `C:\Program Files\Google\Chrome\Application\chrome.exe`
+- **Edge (Windows Fallback)**: `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`
+
+> [!WARNING]
+> Always verify which binary the user intended to use. Never launch Chrome Stable if the user has requested Chrome Beta.
+
+### 4.5 Anti-Patterns & Common Traps
+1. **Never Create Symlinks in Chrome or DevTools Directories**:
+   - DevTools Protocol is built natively into the Chromium binary.
+   - Creating filesystem junctions or symlinks (e.g. trying to link devtools folders) risks breaking auto-updates and corrupting Chrome's installation.
+2. **`chrome://inspect` URL Trap**:
+   - The correct Chrome internal URL for inspecting remote targets and devices is `chrome://inspect/#devices`.
+   - Navigating to `chrome://inspect/#remote-debugging` produces an empty or invalid view.
+3. **Orphan Background Processes**:
+   - If port 9222 remains locked after closing the visible browser window, a background Chrome child process or headless worker may still be lingering. Check with `Get-Process chrome` or `netstat -ano | findstr 9222`.
+
+### 4.6 Verification Runbook
+```powershell
+# 1. Verify port 9222 is listening
+Get-NetTCPConnection -LocalPort 9222 -ErrorAction SilentlyContinue
+
+# 2. Check CDP metadata endpoint
+(Invoke-RestMethod -Uri "http://localhost:9222/json/version").Browser
+
+# 3. List inspectable open tabs
+(Invoke-RestMethod -Uri "http://localhost:9222/json/list") | Select-Object title, url
+```
+
+### 4.7 Helper CLI Script (`browser_debug.py`)
+Use the included helper script under `scripts/`:
+```bash
+# Check if CDP port is open and report connected browser info
+python scripts/browser_debug.py status
+
+# List inspectable pages and tabs
+python scripts/browser_debug.py list-tabs
+
+# Scan for installed browser binaries across system
+python scripts/browser_debug.py find-browsers
+
+# Launch Chrome Beta with isolated profile and verify port
+python scripts/browser_debug.py launch --channel beta
+```
+
+---
+
+## 5. File Locks & Safe Operations
 
 - **Locked Files**: While the Antigravity desktop application is running, SQLite `.db` files and `agyhub_summaries_proto.pb` are write-locked by Electron. Direct writes to these files will fail with OS sharing violations (`os error 33`).
 - **Profile Merging / Syncing**: If copying or merging conversations across profiles, refer to [`sync-antigravity-conversations`](../sync-antigravity-conversations/SKILL.md) and execute only when the app is closed or via an external terminal.
 
 ---
 
-## 5. Adding New Knowledge to This Skill
+## 6. Adding New Knowledge to This Skill
 
 When you discover new quirks or internal behavior not covered in system prompts:
 1. Document the misconception vs. the actual implementation.
