@@ -94,6 +94,58 @@ def fetch_json(url: str):
         return None
 
 
+def sync_devtools_active_port(port: int = DEFAULT_PORT) -> list:
+    """
+    Syncs the active CDP port and WebSocket browser context path to DevToolsActivePort
+    across standard Chrome and Chrome Beta user data directories.
+    This fulfills the exact file requirement of Antigravity's chrome_devtools subagent tool.
+    """
+    version_info = fetch_json(f"http://127.0.0.1:{port}/json/version")
+    if not version_info:
+        return []
+
+    ws_url = version_info.get("webSocketDebuggerUrl", "")
+    ws_path = ""
+    if "/devtools/browser/" in ws_url:
+        ws_path = ws_url[ws_url.index("/devtools/browser/"):]
+
+    content = f"{port}\n{ws_path}\n"
+
+    target_dirs = []
+    if platform.system() == "Windows":
+        local_app_data = os.environ.get("LOCALAPPDATA", os.path.expanduser(r"~\AppData\Local"))
+        target_dirs.extend([
+            Path(local_app_data) / "Google" / "Chrome" / "User Data",
+            Path(local_app_data) / "Google" / "Chrome Beta" / "User Data",
+        ])
+    elif platform.system() == "Darwin":
+        app_support = Path(os.path.expanduser("~/Library/Application Support"))
+        target_dirs.extend([
+            app_support / "Google" / "Chrome",
+            app_support / "Google" / "Chrome Beta",
+        ])
+    else:
+        config_dir = Path(os.path.expanduser("~/.config"))
+        target_dirs.extend([
+            config_dir / "google-chrome",
+            config_dir / "google-chrome-beta",
+        ])
+
+    target_dirs.append(DEFAULT_DEBUG_PROFILE)
+
+    synced = []
+    for d in target_dirs:
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            port_file = d / "DevToolsActivePort"
+            port_file.write_text(content, encoding="ascii")
+            synced.append(port_file)
+        except Exception:
+            pass
+
+    return synced
+
+
 def cmd_status(args):
     """Checks the status of the CDP debugging port."""
     port = args.port
@@ -126,6 +178,26 @@ def cmd_status(args):
     tabs = fetch_json(f"http://127.0.0.1:{port}/json/list") or []
     page_tabs = [t for t in tabs if t.get("type") == "page"]
     print(f"     Active Pages:   {len(page_tabs)} open tab(s)")
+
+    # Auto-sync DevToolsActivePort
+    synced = sync_devtools_active_port(port)
+    if synced:
+        print(f"     DevTools Sync:  DevToolsActivePort refreshed for {len(synced)} profile directory(ies)")
+    return 0
+
+
+def cmd_sync(args):
+    """Refreshes DevToolsActivePort files for Antigravity subagent discovery."""
+    port = args.port
+    print(f"Querying active browser session at port {port}...")
+    synced = sync_devtools_active_port(port)
+    if not synced:
+        print(f"[FAIL] Could not query port {port} or write DevToolsActivePort.")
+        return 1
+
+    print(f"[OK] Successfully synchronized DevToolsActivePort to {len(synced)} location(s):")
+    for p in synced:
+        print(f"  * {p}")
     return 0
 
 
@@ -219,6 +291,9 @@ def cmd_launch(args):
             if version_info:
                 print(f"[OK] Success! Chrome {channel.upper()} is ready on port {port}.")
                 print(f"     Browser: {version_info.get('Browser')}")
+                synced = sync_devtools_active_port(port)
+                if synced:
+                    print(f"     DevTools Sync: DevToolsActivePort synced to {len(synced)} profile directory(ies)")
                 print(f"     Antigravity `/browser` can now connect and inspect tabs.")
                 return 0
 
@@ -238,6 +313,10 @@ def main():
     # status
     p_status = subparsers.add_parser("status", help="Check CDP port status and connected browser info")
     p_status.set_defaults(func=cmd_status)
+
+    # sync
+    p_sync = subparsers.add_parser("sync", help="Synchronize DevToolsActivePort files for Antigravity subagent")
+    p_sync.set_defaults(func=cmd_sync)
 
     # list-tabs
     p_list = subparsers.add_parser("list-tabs", help="List active inspectable browser tabs")

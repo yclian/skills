@@ -138,7 +138,29 @@ Chrome **strictly mandates** an isolated profile directory to activate remote de
 - **Process Isolation**: Spawns an independent process tree that binds `127.0.0.1:9222` immediately.
 - **Session Persistence**: Because `$HOME\.chrome-debug` is persistent on disk, logins (e.g. store admin dashboards, SaaS apps) completed inside this window are preserved across sessions. You only need to authenticate once.
 
-### 4.4 Binary Selection: Chrome Beta vs. Chrome Stable
+### 4.4 The Antigravity Subagent Discovery Hook: `DevToolsActivePort`
+Antigravity's built-in `chrome_devtools` tool in the `browser` subagent does **not** rely solely on probing `http://127.0.0.1:9222`. On Windows, it performs filesystem discovery by reading:
+`C:\Users\<user>\AppData\Local\Google\Chrome\User Data\DevToolsActivePort`
+
+**File Format**:
+```text
+<port>
+<browser_context_path>
+```
+*Example:*
+```text
+9222
+/devtools/browser/7c98bcae-2ab1-4ed1-9c78-68cf5d6fb04d
+```
+
+**The Subagent Disconnect Failure Mode**:
+1. When you run Chrome Beta, or run Chrome with an isolated profile (`--user-data-dir="~/.chrome-debug"`), Chrome does not write `DevToolsActivePort` to standard `Google\Chrome\User Data`.
+2. When launched with an explicit port like `--remote-debugging-port=9222`, Chrome does not dynamically write this file.
+3. If `AppData\Local\Google\Chrome\User Data\DevToolsActivePort` is missing or contains a **stale browser session UUID**, the subagent's `chrome_devtools` tool immediately fails with:
+   > `Could not find DevToolsActivePort for chrome at C:\Users\<user>\AppData\Local\Google\Chrome\User Data\DevToolsActivePort`
+4. **The Fix**: The active port and live browser context path from `http://127.0.0.1:9222/json/version` must be synchronized into `DevToolsActivePort` in `%LOCALAPPDATA%\Google\Chrome\User Data` (handled automatically by `python scripts/browser_debug.py sync` or `launch`).
+
+### 4.5 Binary Selection: Chrome Beta vs. Chrome Stable
 In many developer environments, **Chrome Beta** is preferred for debugging and testing to keep developer tools and experimental configurations separate from standard browsing:
 - **Chrome Beta (Windows)**: `C:\Program Files\Google\Chrome Beta\Application\chrome.exe`
 - **Chrome Stable (Windows)**: `C:\Program Files\Google\Chrome\Application\chrome.exe`
@@ -147,7 +169,7 @@ In many developer environments, **Chrome Beta** is preferred for debugging and t
 > [!WARNING]
 > Always verify which binary the user intended to use. Never launch Chrome Stable if the user has requested Chrome Beta.
 
-### 4.5 Anti-Patterns & Common Traps
+### 4.6 Anti-Patterns & Common Traps
 1. **Never Create Symlinks in Chrome or DevTools Directories**:
    - DevTools Protocol is built natively into the Chromium binary.
    - Creating filesystem junctions or symlinks (e.g. trying to link devtools folders) risks breaking auto-updates and corrupting Chrome's installation.
@@ -157,7 +179,7 @@ In many developer environments, **Chrome Beta** is preferred for debugging and t
 3. **Orphan Background Processes**:
    - If port 9222 remains locked after closing the visible browser window, a background Chrome child process or headless worker may still be lingering. Check with `Get-Process chrome` or `netstat -ano | findstr 9222`.
 
-### 4.6 Verification Runbook
+### 4.7 Verification Runbook
 ```powershell
 # 1. Verify port 9222 is listening
 Get-NetTCPConnection -LocalPort 9222 -ErrorAction SilentlyContinue
@@ -169,11 +191,14 @@ Get-NetTCPConnection -LocalPort 9222 -ErrorAction SilentlyContinue
 (Invoke-RestMethod -Uri "http://localhost:9222/json/list") | Select-Object title, url
 ```
 
-### 4.7 Helper CLI Script (`browser_debug.py`)
+### 4.8 Helper CLI Script (`browser_debug.py`)
 Use the included helper script under `scripts/`:
 ```bash
 # Check if CDP port is open and report connected browser info
 python scripts/browser_debug.py status
+
+# Synchronize live WebSocket context path into DevToolsActivePort for Antigravity subagent
+python scripts/browser_debug.py sync
 
 # List inspectable pages and tabs
 python scripts/browser_debug.py list-tabs
@@ -181,7 +206,7 @@ python scripts/browser_debug.py list-tabs
 # Scan for installed browser binaries across system
 python scripts/browser_debug.py find-browsers
 
-# Launch Chrome Beta with isolated profile and verify port
+# Launch Chrome Beta with isolated profile, verify port, and auto-sync DevToolsActivePort
 python scripts/browser_debug.py launch --channel beta
 ```
 
