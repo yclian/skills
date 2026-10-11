@@ -29,5 +29,5 @@ Morning triage engine for a work Gmail inbox: surfaces what actually needs human
 
 To install skills from this repository:
 ```bash
-npx skills add git@github.com:yclian/skills.git
+npx skills add https://github.com/yclian/skills.git
 ```
