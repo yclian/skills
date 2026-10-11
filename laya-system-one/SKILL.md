@@ -8,6 +8,18 @@ description: >
   Use when designing or writing code for fast semantic routing, bulk event/email
   filtering, data classification pipelines, error triage, or when replacing an
   expensive LLM prompt-and-parse step with a local machine-native decision head.
+example-prompts:
+  - "Set up the Laya daemon and configure the MCP gateway for fast local classification."
+  - "Replace this LLM email triage prompt with a zero-token Laya Choice judgment."
+  - "Score incoming alerts on a 1-3 urgency ladder using Laya's local HTTP endpoint."
+related:
+  - work-signal
+  - gmail-filter-manager
+references:
+  - title: "ModernBERT (Answer.AI / Hugging Face)"
+    url: "https://huggingface.co/answerdotai/ModernBERT-large"
+  - title: "Model Context Protocol (MCP)"
+    url: "https://modelcontextprotocol.io/"
 ---
 
 # Laya: Local System 1 Decision Engine

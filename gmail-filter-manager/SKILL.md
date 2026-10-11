@@ -5,6 +5,17 @@ allowed-tools:
   - run_command
   - view_file
   - replace_file_content
+example-prompts:
+  - "Add a new vendor domain to the automated archive routing filter and validate partition symmetry."
+  - "Audit our Gmail Terraform filter rules for nested boolean clauses that could silently fail at SMTP delivery."
+related:
+  - work-signal
+  - laya-system-one
+references:
+  - title: "Gmail Search Operators Reference"
+    url: "https://support.google.com/mail/answer/7190"
+  - title: "yclian/skills Repository"
+    url: "https://github.com/yclian/skills"
 ---
 
 # Gmail Filter Manager

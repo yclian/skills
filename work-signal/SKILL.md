@@ -8,8 +8,21 @@ description: >-
   attention in work email", "triage my inbox", "anything from leadership",
   "inbox brief", "check unread work email", and the scheduled weekday morning
   run. Does NOT read one specific email, search mail by topic, compose, reply,
-  or send — and does NOT write the weekly executive summary, which is
+  or send - and does NOT write the weekly executive summary, which is
   work-week-recap.
+example-prompts:
+  - "/work-signal"
+  - "What needs my attention in work email this morning?"
+  - "Triage my unread work inbox and surface any leadership or approval threads."
+related:
+  - gmail-filter-manager
+  - todo-in-obsidian
+  - laya-system-one
+references:
+  - title: "Gmail API Reference"
+    url: "https://developers.google.com/gmail/api"
+  - title: "yclian/skills Repository"
+    url: "https://github.com/yclian/skills"
 ---
 
 # Work Signal

@@ -6,6 +6,17 @@ allowed-tools:
   - view_file
   - write_to_file
   - replace_file_content
+example-prompts:
+  - "Schedule a persistent sidecar task that runs every weekday at 9am."
+  - "Why did my /schedule background timer disappear after restarting Antigravity?"
+  - "Connect to the Antigravity browser via CDP and inspect open tabs."
+related:
+  - sync-antigravity-conversations
+references:
+  - title: "yclian/skills Repository"
+    url: "https://github.com/yclian/skills"
+  - title: "Chrome DevTools Protocol Documentation"
+    url: "https://chromedevtools.github.io/devtools-protocol/"
 ---
 
 # Antigravity Extras: The Self-Knowledge Gap

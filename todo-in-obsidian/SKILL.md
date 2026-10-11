@@ -1,8 +1,19 @@
 ---
 name: todo-in-obsidian
-description: Review, triage, and carry forward TODOs across weekly journal notes in Obsidian. It runs a full backlog review with disposition codes (DAL, DSE, KIV, NIN...), effort estimates, delegability calls, and carry-forward into the new week's note. Use whenever the user wants to review weekly entries, do a backlog or TODO review, close out last week, carry over todos, triage open items, revive deferred (DLT) items, or plan the coming week from their journal. Trigger even on casual phrasing like "what's still open from last week", "clean up my todos", or "help me plan this week". Always requires access to the weekly journal folder — ask for it first.
+description: Review, triage, and carry forward TODOs across weekly journal notes in Obsidian. It runs a full backlog review with disposition codes (DAL, DSE, KIV, NIN...), effort estimates, delegability calls, and carry-forward into the new week's note. Use whenever the user wants to review weekly entries, do a backlog or TODO review, close out last week, carry over todos, triage open items, revive deferred (DLT) items, or plan the coming week from their journal. Trigger even on casual phrasing like "what's still open from last week", "clean up my todos", or "help me plan this week". Always requires access to the weekly journal folder - ask for it first.
 metadata:
   version: 2.2.0
+example-prompts:
+  - "What's still open from last week's journal? Help me triage and roll over my TODOs."
+  - "Close out last week's Obsidian note and plan this week's backlog."
+related:
+  - work-signal
+  - calendar-tbd-recommender
+references:
+  - title: "Obsidian Tasks Plugin Documentation"
+    url: "https://publish.obsidian.md/tasks/"
+  - title: "yclian/skills Repository"
+    url: "https://github.com/yclian/skills"
 ---
 
 # Weekly TODO Management in Obsidian

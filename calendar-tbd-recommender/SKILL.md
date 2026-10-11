@@ -6,6 +6,17 @@ allowed-tools:
   - view_file
   - write_to_file
   - replace_file_content
+example-prompts:
+  - "Scan my next two weeks of calendar events for TBD locations and suggest venues."
+  - "Find a coffee or cocktail spot for Friday's TBC meeting based on my current travel city."
+related:
+  - todo-in-obsidian
+  - work-signal
+references:
+  - title: "Google Calendar API Reference"
+    url: "https://developers.google.com/calendar/api"
+  - title: "yclian/skills Repository"
+    url: "https://github.com/yclian/skills"
 ---
 
 # Calendar TBD Venue Recommender
