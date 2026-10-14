@@ -25,6 +25,9 @@ Reviews, triages, and carries forward TODOs across weekly journal notes in Obsid
 ### 🎯 [work-signal](./work-signal)
 Morning triage engine for a work Gmail inbox: surfaces what actually needs human attention (leadership threads, security alerts, access approvals, colleague asks), suppresses high-volume CI and vendor noise, and renders an executive Markdown brief in chat. Includes dual execution paths (Claude Gmail connector vs. local Node 18+ CLI).
 
+### 🛡️ [fleet-restic-backup](./fleet-restic-backup)
+Orchestrates multi-node encrypted backups across mixed-OS fleets (Linux servers, Windows workstations, macOS laptops) into a unified, deduplicated **Restic** repository. Implements zero-downtime SQLite `.backup` pre-hooks, Windows live Volume Shadow Copy (VSS), cross-platform SFTP link tolerance, non-fatal warning degradation, and automated Grandfather-Father-Son (GFS) retention.
+
 ## Installation
 
 To install skills from this repository:
