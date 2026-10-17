@@ -318,3 +318,35 @@ Recent open-source benchmarks and autonomous agent evaluations highlight three c
     - Pre-filtering incoming events/emails *before* they enter the agent loop.
     - Diagnosing error traces *inside a tool execution* (tool outputs append to the end of the transcript, preserving the cached conversation prefix).
     - Standalone batch pipelines and background workers (event routers, scrapers, data filtering pipelines).
+
+---
+
+## 8. Upgrade & Maintenance Procedure
+
+To maintain deterministic zero-token operations and prevent dependency drift across fleet hosts, follow this upgrade procedure.
+
+### 1-Command Deterministic Upgrade (`scripts/upgrade_laya.sh`)
+From the skill repository or directly on the host machine:
+```bash
+# Upgrade to latest validated version (or specify explicit version)
+bash scripts/upgrade_laya.sh 0.4.7
+```
+
+What `upgrade_laya.sh` does deterministically:
+1. **CPU Torch Guard (`--no-deps`)**: Upgrades `laya` without letting PyPI overwrite host CPU wheels (`torch==2.x+cpu`) with multi-gigabyte CUDA packages.
+2. **Pre-Restart Smoke Test**: Loads `convaiinnovations/laya`, tests `choice`, `noul`, and verifies that ordered `score` criteria are rendered properly before touching the active service.
+3. **Restarts Daemon**: Reloads `systemd` and restarts `laya.service`.
+4. **Health & Contract Audit**: Asserts `http://127.0.0.1:8500/health` reports `"ready": true` and `"laya_version": "0.4.7"`.
+5. **Zero-Persistence Verification (Imlad Decision #17)**: Inspects `journalctl -u laya` to verify decisions log `input_len` only, guaranteeing zero work payloads ever touch host disks.
+
+### Manual Upgrade Reference
+```bash
+# 1. Update server wrapper & dependencies
+cp scripts/server.py /srv/laya/server.py
+~/.local/bin/uv pip install --python /srv/laya/venv/bin/python --no-deps "laya==0.4.7"
+
+# 2. Restart & verify
+sudo systemctl restart laya
+curl -s http://127.0.0.1:8500/health | jq .
+```
+
