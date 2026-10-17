@@ -69,14 +69,12 @@ def record_decision(
     confidence: Optional[float],
     latency_ms: float
 ):
-    """Log structured decision and record runtime metrics."""
-    input_summary = str(input_text).strip().replace("\n", " ")
-    if len(input_summary) > 80:
-        input_summary = input_summary[:77] + "..."
-    
+    """Log structured decision and record runtime metrics (Decision #17 compliant)."""
+    input_len = len(str(input_text)) if input_text is not None else 0
     tier = get_confidence_tier(confidence)
     conf_str = f"conf={confidence:.2f} tier={tier}" if confidence is not None else "conf=n/a tier=unscored"
-    logger.info("⚡ [%s] choice='%s' %s latency=%.1fms | input='%s'", tool, choice, conf_str, latency_ms, input_summary)
+    # Imlad Decision #17: Never persist work payload to disk/journald
+    logger.info("⚡ [%s] choice='%s' %s latency=%.1fms | input_len=%d", tool, choice, conf_str, latency_ms, input_len)
     
     entry = {
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -85,7 +83,7 @@ def record_decision(
         "confidence": round(confidence, 4) if confidence is not None else None,
         "tier": tier,
         "latency_ms": round(latency_ms, 2),
-        "input": input_summary
+        "input_len": input_len
     }
     
     with stats_lock:
@@ -115,22 +113,28 @@ def laya_classify(
     if agent is None:
         raise RuntimeError("Laya model not ready")
     
-    results = []
-    for item in items:
-        q = {
-            "cat": {
-                "type": "choice",
-                "instructions": instructions,
-                "criteria": categories
-            }
+    q = {
+        "cat": {
+            "type": "choice",
+            "instructions": instructions,
+            "criteria": categories
         }
-        t0 = time.time()
-        res = agent.predict(_scrub(item), q)
-        latency_ms = (time.time() - t0) * 1000
+    }
+    scrubbed_items = [_scrub(item) for item in items]
+    t0 = time.time()
+    if hasattr(agent, "predict_batch") and len(scrubbed_items) > 1:
+        batch_preds = agent.predict_batch(scrubbed_items, q)
+    else:
+        batch_preds = [agent.predict(item, q) for item in scrubbed_items]
+    total_ms = (time.time() - t0) * 1000
+    per_item_ms = total_ms / max(len(items), 1)
+
+    results = []
+    for item, res in zip(items, batch_preds):
         ans = res.get("answers", {}).get("cat", {})
         choice = ans.get("choice")
         conf = ans.get("confidence")
-        record_decision("laya_classify", item, choice, conf, latency_ms)
+        record_decision("laya_classify", item, choice, conf, per_item_ms)
         results.append({
             "item": item,
             "category": choice,
@@ -209,20 +213,34 @@ def laya_noul(
 @mcp.tool()
 def laya_score(
     text: str,
-    levels: Dict[str, str],
+    levels: Union[Dict[str, str], List[str]],
     instructions: str = "Score the position along this ordered dimension."
 ) -> Dict[str, Any]:
-    """Score text across ordered semantic levels (e.g. {"1": "Low", "2": "Medium", "3": "High"}).
+    """Score text across ordered semantic levels (e.g. ["Low", "Medium", "High"] or {"1": "Low", "2": "Medium", "3": "High"}).
     Returns expected probability-weighted score and the distribution across levels.
     """
     if agent is None:
         raise RuntimeError("Laya model not ready")
     
+    # Upstream laya common.py:render_options renders score crit via enumerate(crit).
+    # If passed a dict, enumerate(dict) only sees keys ("1", "2") and drops rubric values.
+    # Normalize to ordered list of rubric strings so descriptions are rendered properly.
+    if isinstance(levels, dict):
+        crit = [
+            str(v)
+            for _, v in sorted(
+                levels.items(),
+                key=lambda kv: int(kv[0]) if str(kv[0]).isdigit() else str(kv[0]),
+            )
+        ]
+    else:
+        crit = [str(item) for item in levels]
+
     q = {
         "metric": {
             "type": "score",
             "instructions": instructions,
-            "criteria": levels
+            "criteria": crit
         }
     }
     t0 = time.time()
@@ -410,9 +428,14 @@ def laya_is_safe(
 @contextlib.asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
     global agent
-    logger.info("Preloading Laya model (convaiinnovations/laya)...")
+    model_id = os.environ.get("LAYA_MODEL", "convaiinnovations/laya")
+    subfolder = os.environ.get("LAYA_MODEL_SUBFOLDER", "").strip() or None
+    logger.info("Preloading Laya model (%s%s)...", model_id, f", subfolder={subfolder}" if subfolder else "")
     t0 = time.time()
-    agent = laya.load("convaiinnovations/laya", device="cpu")
+    if subfolder:
+        agent = laya.load(model_id, subfolder=subfolder, device="cpu")
+    else:
+        agent = laya.load(model_id, device="cpu")
     logger.info(f"Laya model loaded in {time.time() - t0:.2f}s")
     
     # Run MCP StreamableHTTP session manager
@@ -433,9 +456,13 @@ app.add_middleware(
 @app.get("/health")
 def health():
     total = STATS["total_decisions"]
+    laya_ver = getattr(laya, "__version__", "unknown")
+    subfolder = os.environ.get("LAYA_MODEL_SUBFOLDER", "").strip() or None
     return {
         "status": "healthy",
-        "model": "convaiinnovations/laya",
+        "model": os.environ.get("LAYA_MODEL", "convaiinnovations/laya"),
+        "subfolder": subfolder,
+        "laya_version": laya_ver,
         "backbone": "ModernBERT-large (395M)",
         "device": "cpu",
         "ready": agent is not None,
