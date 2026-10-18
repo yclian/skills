@@ -28,6 +28,9 @@ Morning triage engine for a work Gmail inbox: surfaces what actually needs human
 ### 🛡️ [fleet-restic-backup](./fleet-restic-backup)
 Orchestrates multi-node encrypted backups across mixed-OS fleets (Linux servers, Windows workstations, macOS laptops) into a unified, deduplicated **Restic** repository. Implements zero-downtime SQLite `.backup` pre-hooks, Windows live Volume Shadow Copy (VSS), cross-platform SFTP link tolerance, non-fatal warning degradation, and automated Grandfather-Father-Son (GFS) retention.
 
+### 📐 [engineering](./engineering) (`yclian-engineering`)
+Software engineering, verification, packaging, resilience, and git history standards designed for the **agentic coding era**—where code generation is cheap, mocked unit tests become tautologies, and reality-anchored verification + clean human review are the bottlenecks. Features **Dual-Boundary (Reality-and-Oracle) Verification** (ingress reality capture via `fixtures/` and contrastive pairs, pure-transform core with TDD/property tests, egress scenario suites backed by ranked oracles and `afterEach` invariant sweeps), thin zero-magic abstractions, the 3-tier packaging progression, multi-instance state persistence, and Conventional Commit + logical-category commit squashing rules.
+
 ## Installation
 
 To install skills from this repository:
