@@ -230,7 +230,32 @@ python scripts/browser_debug.py launch --channel beta
 
 ---
 
-## 6. Adding New Knowledge to This Skill
+## 6. Custom Agent Frontmatter (`~/.gemini/config/agents/*.md`) vs. Claude Code (`~/.claude/agents/*.md`)
+
+### 6.1 The Pitfall: Opposite Tool-Palette Defaults & `CustomAgentSpec` Persistence
+When sharing custom agent personas (`master.md`, `broker.md`, `worker.md`, `reviewer.md`, `breaker.md`) across **Antigravity (`agy`)** and **Claude Code (`claude`)**, two silent traps occur:
+
+1. **Opposite `tools:` Defaults**:
+   - **Antigravity (`agy`)**: A custom `.md` agent file that **omits** an explicit `tools:` list in its YAML frontmatter defaults to the **read-only subagent toolset** (`view_file`, `search_web`, `call_mcp_tool`), silently stripping `run_command`, `write_to_file`, `replace_file_content`, `invoke_subagent`, and `run_workflow`.
+   - **Claude Code (`claude`)**: A custom `.md` agent file that **omits** `tools:` inherits **all native Claude tools** (`Read`, `Edit`, `Write`, `Bash`, `PowerShell`, `Glob`, `Grep`, `Agent`, `Workflow`). Conversely, if `tools:` is present and contains Antigravity tool names (`view_file`, `run_command`), Claude filters against that list, matches **0 tools**, and refuses to start the agent!
+2. **Per-Conversation `CustomAgentSpec` Persistence in `agy`**:
+   - When a conversation is created with `agy --agent <role>`, Antigravity serializes a `CustomAgentSpec` into the conversation's trajectory metadata (`CortexTrajectoryMetadata.static_config`).
+   - Resuming that conversation later with `agy --conversation=<uuid>` (even **without** `--agent`) reloads the saved `static_config` from creation time. If the conversation was created while the agent was read-only, resuming it remains permanently read-only; start a fresh `agy` conversation and point it at `~/.gemini/antigravity/brain/<old-uuid>/.system_generated/logs/transcript.jsonl` to recover context.
+
+| Harness | Target Directory | Internal Tool Registry Names | Behavior if `tools:` is **OMITTED** | Behavior if `tools:` has the other harness's names |
+| :--- | :--- | :--- | :--- | :--- |
+| **Antigravity (`agy`)** | `~/.gemini/config/agents/*.md`<br/>*(or `.agents/agents/*.md`)* | `view_file`, `write_to_file`, `replace_file_content`, `run_command`, `invoke_subagent`, `define_subagent`, `manage_subagents`, `run_workflow`, `send_message`, `ask_question`, `search_web`, `search_marketplace`, `schedule`, `manage_task`, `generate_image` *(MCP tools `call_mcp_tool`, `list_resources`, `read_resource` are auto-inherited via `inheritMcp` — do NOT list them in `tools:`)* | **Defaults to Read-Only** (strips `run_command` & `write_to_file`!). | Crashes with `unknown component: tool "Read" not found in registry`. |
+| **Claude Code (`claude`)** | `~/.claude/agents/*.md` | `Read`, `Edit`, `Write`, `Bash`, `PowerShell`, `Glob`, `Grep`, `Agent`, `ListAgents`, `Workflow`, `Skill`, `ToolSearch`, `ScheduleWakeup`, `ReportFindings` | **Inherits ALL Native Tools** (full capability!). | Matches **0 tools** $\to$ refuses to start the custom agent! |
+
+### 6.2 The Solution: Canonical AGY Source + `sync-agents.ps1` Dual-Harness Compilation
+1. Keep the canonical `.md` files in `yclian/machines/.agents/agents/*.md` with the explicit Antigravity `tools:` and `agents:` YAML frontmatter.
+2. Run `yclian/machines/.agents/agents/sync-agents.ps1` whenever updating personas:
+   - Copies the full file (with `tools:` and `agents:`) into `~/.gemini/config/agents/` for `agy`.
+   - Automatically strips `^(tools:|agents:|  - )` when writing into `~/.claude/agents/` so `claude` inherits its full native tool palette.
+
+---
+
+## 7. Adding New Knowledge to This Skill
 
 When you discover new quirks or internal behavior not covered in system prompts:
 1. Document the misconception vs. the actual implementation.
