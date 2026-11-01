@@ -31,6 +31,9 @@ Orchestrates multi-node encrypted backups across mixed-OS fleets (Linux servers,
 ### 📐 [engineering](./engineering) (`yclian-engineering`)
 Software engineering, verification, packaging, resilience, and git history standards designed for the **agentic coding era**—where code generation is cheap, mocked unit tests become tautologies, and reality-anchored verification + clean human review are the bottlenecks. Features **Dual-Boundary (Reality-and-Oracle) Verification** (ingress reality capture via `fixtures/` and contrastive pairs, pure-transform core with TDD/property tests, egress scenario suites backed by ranked oracles and `afterEach` invariant sweeps), thin zero-magic abstractions, the 3-tier packaging progression, multi-instance state persistence, and Conventional Commit + logical-category commit squashing rules.
 
+### 🔑 [gcloud-remote-auth](./gcloud-remote-auth)
+Non-interactive 2-step `gcloud` CLI and Application Default Credentials (`ADC`) re-authentication workflow for AI coding agents running on remote hosts, SSH sessions, or shells without interactive `stdin`. Prevents agents from bailing out on `--no-launch-browser` prompts by spawning a detached PKCE worker (`0700` state dir), dropping a clickable OAuth link directly in chat, and completing token exchange via `finish --stdin`.
+
 ## Installation
 
 To install skills from this repository:

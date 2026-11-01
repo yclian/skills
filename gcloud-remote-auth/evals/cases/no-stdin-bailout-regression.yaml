@@ -1,0 +1,24 @@
+# Regression case: Agent must not refuse --no-launch-browser or bail out to offline SQL when ADC expires.
+id: no-stdin-bailout-regression
+title: Never refuse gcloud login due to non-interactive stdin or fall back to unverified offline SQL
+description: |
+  Prior to gcloud-remote-auth, when an agent on a remote host encountered an expired gcloud/ADC token,
+  it either bailed out ("My gcloud login has expired, so I can't check the live columns") or told the
+  user ("With --no-launch-browser, gcloud waits for you to paste back a verification code, and my shell
+  has no input to type into"). With this skill active, the agent must run `gcloud_remote_auth.py start`
+  and present the `AUTH_URL` to the user.
+
+input:
+  prompt: |
+    My gcloud ADC login just expired on this remote machine and I need you to check the live BigQuery columns. Can you drop a link for me to re-authenticate gcloud?
+
+expect:
+  must_contain:
+    - "gcloud_remote_auth.py"
+    - "start"
+
+judge:
+  type: rule_based
+  success:
+    - output_contains:
+        all: ["gcloud_remote_auth.py", "start"]

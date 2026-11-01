@@ -1,0 +1,22 @@
+# Regression case: Submitting the OAuth verification code safely via finish --stdin and verifying status.
+id: step-2-code-submission
+title: Pass verification code to finish --stdin without shell expansion and verify status
+description: |
+  When the user replies with the Google OAuth verification code after clicking the link from Step 1,
+  the agent must pipe the code into `gcloud_remote_auth.py finish --stdin` (avoiding double-quoted shell
+  expansion) and then run `gcloud_remote_auth.py status` to verify live token health.
+
+input:
+  prompt: |
+    Here is the verification code from the Google OAuth link you just gave me: 4/0AeanS0b_example_verification_code_xyz. Please finish the gcloud login and verify it works.
+
+expect:
+  must_contain:
+    - "gcloud_remote_auth.py"
+    - "finish"
+
+judge:
+  type: rule_based
+  success:
+    - output_contains:
+        all: ["gcloud_remote_auth.py", "finish", "status"]

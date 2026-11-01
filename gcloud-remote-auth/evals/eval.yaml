@@ -1,0 +1,25 @@
+# skill-up eval suite for gcloud-remote-auth
+# Run: skill-up validate evals/eval.yaml && skill-up run evals/eval.yaml
+
+schema_version: v1alpha1
+
+environment:
+  type: none
+
+skills:
+  - source: local_path
+    path: .
+
+engine:
+  name: claude_code
+
+cases:
+  files:
+    - evals/cases/no-stdin-bailout-regression.yaml
+    - evals/cases/step-2-code-submission.yaml
+  defaults:
+    timeout_seconds: 120
+    max_turns: 5
+
+report:
+  formats: [json]
