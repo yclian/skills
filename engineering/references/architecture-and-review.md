@@ -50,3 +50,21 @@ Evaluate every change along **Axis 1 (Engineering Standards)** and **Axis 2 (Spe
 ### Step 2: Author Adversarial Reviewer Probes
 - Write **probes** from the spec *without* trusting the implementation's happy path: Unicode/long strings, pagination boundaries (100+ items), concurrent token refreshes, spoofed proxy headers (`X-Forwarded-For`), cold-start mid-flow, missing optional claims.
 - Any probe that exposes a defect is promoted into a permanent scenario in the test suite.
+
+---
+
+## 4. Multi-Agent Persona & Model Tiering Architecture (`master` $\to$ `worker` $\to$ `breaker` + `reviewer`)
+
+To maximize reasoning quality on architecture while preserving quota and speed during implementation, separate agent roles across **two cognitive model tiers** (with an on-demand **Deep-Reasoning Escalation Tier**):
+
+| Persona | Role Mandate | Antigravity (`agy`) Default | Claude Code (`claude`) Default | Deep-Reasoning Escalation (`-Deep`) | Tool Boundary |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`master`** | **Architect, Team Lead & Direct Orchestrator**: Grills specs, runs Pugh matrices, writes `docs/specs/` & `docs/plans/`, and directly spawns `worker`, `breaker`, `reviewer`. | `model: pro`<br/>*(Gemini 4 Argon)* | `model: opus` | `agy`: `--model gemini-4-argon-high --effort high`<br/>`claude`: `--model fable --effort high` | Full write + shell + `invoke_subagent` + `run_workflow` *(Soft Gate: plan-first before app code)*. |
+| **`worker`** | **Worktree TDD Builder**: Executes approved spec phases inside `.worktrees/<slug>` with Dual-Boundary verification. | `model: flash`<br/>*(Gemini 3.8 Flash)* | `model: sonnet` | Escalate to `pro` / `opus` only if a sub-task requires gnarly algorithmic synthesis. | Full write + shell; leaf executor (no subagent spawning). |
+| **`reviewer`** | **Defensive Pre-PR Gatekeeper**: Runs test suite, inspects `git diff`, and audits the Test Oracle table (rejects tautological mocks). | `model: flash` | `model: sonnet` | — | **Hard Read-Only + Shell** (`view_file`, `run_command`; no file writes). |
+| **`breaker`** | **Offensive Red-Team & Chaos Saboteur**: Traces untrusted inputs to sinks (IDOR, injection, secret leaks, TOCTOU races). | `model: pro` | `model: opus` | `agy`: `gemini-4-argon-high`<br/>`claude`: `fable --effort high` | **Hard Read-Only + Shell** (`view_file`, `run_command`; no file writes). |
+| **`broker`** | **Escalation Unblocker & Queue Deputy**: Off the normal critical path; invoked only on stalled workers, >3 worktree sprawl, or background queue dispatch. | `model: flash` | `model: sonnet` | — | Full write + shell + spawns `worker`, `reviewer`. |
+
+### Why This Split Works
+1. **Spec Precision Unlocks Fast Execution**: When `master` (running on `Argon` / `Opus` / `Fable`) resolves every design ambiguity up front and writes exact file/line targets and scenario tables into `docs/specs/`, `worker` does not need frontier reasoning to type out the code and run `pytest`—`Flash` / `Sonnet` executes the 4-phase loop 3x faster at a fraction of the token budget.
+2. **Independent Adversarial Verification**: Spawning `breaker` (`Pro` / `Opus`) and `reviewer` (`Flash` / `Sonnet`) in fresh context windows prevents the author (`worker`) from grading its own homework.
