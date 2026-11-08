@@ -53,7 +53,9 @@ Evaluate every change along **Axis 1 (Engineering Standards)** and **Axis 2 (Spe
 
 ---
 
-## 4. Multi-Agent Persona & Model Tiering Architecture (`master` $\to$ `worker` $\to$ `breaker` + `reviewer`)
+## 4. Pentarch SDLC: Multi-Agent Persona & Model Tiering Architecture (`master` $\to$ `worker` $\to$ `breaker` + `reviewer`)
+
+The **Pentarch SDLC** (derived from classical Greek *πενταρχία*, governance by five collegiate peers) replaces monolithic, autocratic prompt loops with five specialized agents governing code quality through mutual checks on power.
 
 To maximize reasoning quality on architecture while preserving quota and speed during implementation, separate agent roles across **two cognitive model tiers** (with an on-demand **Deep-Reasoning Escalation Tier**):
 

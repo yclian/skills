@@ -144,7 +144,7 @@ Agents made black-box harnesses cheap and white-box mocked unit tests dangerous 
 3. **Two-Axis Code Review + Probes**:
    - Confirm scope before fan-out. Review along **Standards + Spec Adherence** in sequence: `contracts/schemas → logic → edge cases → naming → tests/oracles`.
    - For deployed services, verify the *running revision / deployed artifact* (`file:import`, `object:import`, Cloud Run revision), never just local git.
-4. **5-Persona & 2-Tier Model Orchestration (`master` · `worker` · `breaker` · `reviewer` · `broker`)**:
+4. **Pentarch SDLC: 5-Persona & 2-Tier Model Orchestration (`master` · `worker` · `breaker` · `reviewer` · `broker`)**:
    - **Plan & Break on Frontier (`Pro` / `Argon` / `Opus` / `Fable`)**: Use `master` to grill requirements, score Pugh matrices, and author committed specs (`docs/specs/`) and implementation plans (`docs/plans/`); use `breaker` for multi-hop red-team exploit tracing. Escalate to deep-reasoning (`--model gemini-4-argon-high --effort high` in `agy` or `--model fable --effort high` in `claude`) for novel architecture or hard concurrency puzzles.
    - **Execute & Gate on Fast Coding Tier (`Flash` / `Sonnet`)**: Once `master` commits an exact spec & plan, delegate worktree TDD implementation to `worker` (`Model="flash"` / `model: sonnet`) and pre-PR verification to `reviewer` (`Model="flash"` / `model: sonnet`)—3x faster execution at a fraction of frontier quota. Keep `broker` ("Deputy") off the critical path for exception/deadlock recovery and background queue triage only.
 
