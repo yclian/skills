@@ -95,29 +95,33 @@ flowchart TD
   ```
 * The source database can remain under active read/write load; the SQLite backup API guarantees an internally consistent snapshot.
 
-### Invariant 2: Windows VSS Snapshots Under Service Accounts
-**Local Windows paths with locked files must use Volume Shadow Copy (VSS).**
-* Background applications (e.g. browser profiles, active editors, memory engines) hold exclusive file locks that standard file copiers fail on.
-* Restic natively supports VSS on Windows via the `--use-fs-snapshot` flag.
-* **Privilege Requirement**: VSS requires administrative privileges. Register the scheduled task under `NT AUTHORITY\SYSTEM` with highest privileges (`/RL HIGHEST`).
-* **OpenSSH Ownership Trap**: When running scripts as `SYSTEM`, Windows OpenSSH strictly checks file *Owner* in addition to ACLs. Private keys must be owned by `SYSTEM`:
-  ```powershell
-  icacls id_rsa /setowner SYSTEM
-  icacls id_rsa /inheritance:r
-  icacls id_rsa /grant:r "SYSTEM:(R)" "Administrators:(R)"
-  ```
+### Invariant 2: Windows VSS Snapshots (Storage Hub vs. Non-Elevated Workstations)
+**Distinguish between the dedicated Storage Hub (`NT AUTHORITY\SYSTEM` + VSS) and interactive Workstations (non-elevated user space).**
+* **Storage Hub (`SYSTEM` + `--use-fs-snapshot`)**:
+  * Background applications hold exclusive file locks that standard file copiers fail on. On the dedicated Windows Storage Hub, `restic` uses Volume Shadow Copy (VSS) via `--use-fs-snapshot`.
+  * VSS requires administrative privileges. Register the hub scheduled task under `NT AUTHORITY\SYSTEM` with highest privileges (`/RL HIGHEST`).
+  * **OpenSSH Ownership Trap**: When running scripts as `SYSTEM`, Windows OpenSSH strictly checks file *Owner* in addition to ACLs. Private keys must be owned by `SYSTEM`:
+    ```powershell
+    icacls id_rsa /setowner SYSTEM
+    icacls id_rsa /inheritance:r
+    icacls id_rsa /grant:r "SYSTEM:(R)" "Administrators:(R)"
+    ```
+* **Interactive Workstations (`Aili` / `Suzu` - Non-Elevated User Space, Omit `--use-fs-snapshot`)**:
+  * Workstation push or catch-up tasks running under the standard interactive user account (Principle of Least Privilege) **must omit `--use-fs-snapshot`** (passing `--use-fs-snapshot` without elevation aborts immediately with `Access is denied` on VSS snapshot creation).
+  * Instead, rely on atomic SQLite `.backup` pre-hooks (Invariant 1) + targeted lock exclusions (`--iexclude`), and treat `restic` exit code `3` (partial read warning on transient browser locks) as non-fatal (Invariant 4).
 
-### Invariant 3: Cross-Platform Symlink & SFTP Tolerance
-**SFTP servers on Windows cannot safely traverse cross-platform relative links or directory junctions.**
+### Invariant 3: Cross-Platform Symlink & Windows SFTP Path Normalization
+**SFTP servers on Windows cannot safely traverse cross-platform relative links, and `restic` on Windows requires explicit `sftp.command` normalization.**
 * Git repositories often contain tool symlinks (e.g., `.claude/skills` or `.antigravitycli` worktree references).
 * Calling `rclone` with `--links` forces it to inspect each symlink with `Lstat`/`Readlink`. Windows OpenSSH SFTP fails with `SSH_FX_BAD_MESSAGE` or `SSH_FX_FAILURE` on broken or cross-platform junction targets.
-* **The Solution**: On multi-host syncs, use `--sftp-skip-links` and `--skip-links`:
+* **The Rclone Solution**: On multi-host syncs, use `--sftp-skip-links` and `--skip-links`:
   ```bash
   rclone sync remote:/path /local/staging \
     --sftp-skip-links \
     --skip-links \
     --exclude-from excludes.txt
   ```
+* **The Windows Restic SFTP Solution (`sftp.command`)**: When running `restic` on Windows against an SFTP repository (`sftp:user@host:/D:/Backups/...`) or passing custom SSH keys/ports, always pass `-o sftp.command="ssh.exe -i C:/path/to/key -o StrictHostKeyChecking=accept-new user@host -s sftp"` using forward slashes in key paths so Windows drive colons (`C:`) are not misparsed as host:path separators.
 
 ### Invariant 4: Non-Fatal Warning Degradation
 **Never let a single inaccessible file or missing optional folder abort a host's entire backup.**

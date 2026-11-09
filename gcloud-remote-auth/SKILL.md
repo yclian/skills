@@ -69,3 +69,18 @@ python "<SKILL_DIR>/scripts/gcloud_remote_auth.py" status
 **Completion Criteria for Step 3**:
 - Command exits with code `0` and confirms both `OK: gcloud CLI access token is valid and active` and `OK: Application Default Credentials (ADC) token is valid and active`.
 - Once verified, immediately resume the original `gcloud` / `bq` / database inspection task that triggered the re-authentication.
+
+---
+
+## Step 4: Fallback for OAuth Clients Requiring Localhost Redirect (`ssh -L 8085`)
+
+When authenticating headless tools (`gog auth`, newer `gcloud` OAuth client flows, or Workspace OAuth credentials) where Google's OAuth endpoint rejects out-of-band copy-paste verification codes (`redirect_uri=http://localhost:<PORT>` required):
+
+1. **Never use deprecated `--no-browser` flags** on tools that require a loopback HTTP callback listener.
+2. **Use SSH Localhost Port Forwarding** from the interactive workstation (`Aili` / `Suzu`) to the headless host (`Arwen` / `Adara`):
+   ```bash
+   # 1. Start the OAuth login listener on the remote headless host (captures the ephemeral localhost port, e.g. 8085)
+   # 2. From the local workstation with a logged-in browser, forward that exact localhost port:
+   ssh -N -L 8085:127.0.0.1:8085 yclian@arwen.dikdik-dojo.ts.net
+   ```
+3. Open the emitted `https://accounts.google.com/o/oauth2/auth?...&redirect_uri=http://localhost:8085/...` URL in the local workstation browser. Upon consent, the browser redirects to `localhost:8085`, which tunnels through SSH directly into the remote CLI's loopback listener and completes token exchange cleanly.
