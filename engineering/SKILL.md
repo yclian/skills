@@ -149,3 +149,6 @@ Agents made black-box harnesses cheap and white-box mocked unit tests dangerous 
    - **Execute & Gate on Fast Coding Tier (`Flash` / `Sonnet`)**: Once `master` commits an exact spec & plan, delegate worktree TDD implementation to `worker` (`Model="flash"` / `model: sonnet`) and pre-PR verification to `reviewer` (`Model="flash"` / `model: sonnet`)—3x faster execution at a fraction of frontier quota. Keep `broker` ("Deputy") off the critical path for exception/deadlock recovery and background queue triage only.
 
 👉 **Load [`references/architecture-and-review.md`](./references/architecture-and-review.md)** for templates, review checklists, and the multi-agent model tiering matrix, and **[`references/web-and-cloud-mechanics.md`](./references/web-and-cloud-mechanics.md)** for CSS grid/layer rules, Cloud Run + Terraform 4-step bootstrap, and Windows/MSYS path conversion guards.
+
+
+👉 **Load [`references/systems-principles-and-governance.md`](./references/systems-principles-and-governance.md)** for the **Eight-Principle Systems Canon** (*Principles scale better and last longer than tools*), obfuscated field case studies, and how `master` (Pre-Flight Gauntlet, Pugh dissent, migration calculus) and `broker` (3-WIP stock cap, causal order over memory, two-way drift reconciliation, Sorites boundary escalation) operationalize systems governance.
