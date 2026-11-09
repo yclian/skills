@@ -79,6 +79,38 @@ class TestPureTransforms(unittest.TestCase):
             gra.build_gcloud_login_cmd("gcloud", account="user@example.com; rm -rf /")
 
 
+class TestProfiles(unittest.TestCase):
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="gra_prof_")
+        os.makedirs(os.path.join(self.root, "personal"))
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def test_profile_env_points_both_variables_at_one_folder(self):
+        env = gra.profile_env("personal", root=self.root)
+        folder = os.path.join(self.root, "personal")
+        self.assertEqual(env["CLOUDSDK_CONFIG"], folder)
+        self.assertEqual(
+            env["GOOGLE_APPLICATION_CREDENTIALS"],
+            os.path.join(folder, "application_default_credentials.json"),
+        )
+
+    def test_profile_env_rejects_unsafe_names(self):
+        for bad in ("", "../work", "a b", "work/x", "-rf"):
+            with self.assertRaises(ValueError, msg=bad):
+                gra.profile_env(bad, root=self.root)
+
+    def test_profile_env_requires_existing_folder(self):
+        with self.assertRaises(ValueError):
+            gra.profile_env("work", root=self.root)
+
+    def test_state_dir_is_separate_per_profile(self):
+        base = os.path.join(self.root, "state")
+        self.assertEqual(gra.get_state_dir(base, profile="personal"), os.path.join(base, "personal"))
+        self.assertEqual(gra.get_state_dir(base), base)
+
+
 class TestBoundaryScenarios(unittest.TestCase):
     def setUp(self):
         self.temp_root = tempfile.mkdtemp(prefix="gra_test_")
@@ -105,7 +137,10 @@ class TestBoundaryScenarios(unittest.TestCase):
             f.write(
                 f'''import sys, time
 args = sys.argv[1:]
+import os
+PROFILE_TAG = "CFG=" + os.environ.get("CLOUDSDK_CONFIG", "-") + " GAC=" + os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "-")
 if "list" in args:
+    print(PROFILE_TAG)
     print("ACTIVE  ACCOUNT\\n*       user@example.com")
     sys.exit(0)
 if "print-access-token" in args:
@@ -121,6 +156,7 @@ if "login" in args:
     line = sys.stdin.readline().strip()
     if line == "{PLANTED_AUTH_CODE}":
         print("\\nYou are now logged in as [user@example.com].\\nCredentials saved to file.")
+        print(PROFILE_TAG)
         sys.exit(0)
     else:
         # Deliberately omit literal "ERROR:" to test Probe 7 fast exit sentinel detection
@@ -140,8 +176,10 @@ if "login" in args:
             os.chmod(wrapper, 0o755)
             return wrapper
 
-    def _run_cli(self, *args: str, stdin_text: str | None = None) -> subprocess.CompletedProcess:
+    def _run_cli(self, *args: str, stdin_text: str | None = None, extra_env: dict | None = None) -> subprocess.CompletedProcess:
         env = os.environ.copy()
+        env.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+        env.update(extra_env or {})
         env["GCLOUD_REMOTE_AUTH_STATE_DIR"] = self.state_dir
         env["GCLOUD_REMOTE_AUTH_GCLOUD_BIN"] = self.fake_gcloud
         return subprocess.run(
@@ -152,6 +190,46 @@ if "login" in args:
             env=env,
             timeout=20,
         )
+
+    def _make_profiles(self):
+        root = os.path.join(self.temp_root, "profiles")
+        for name in ("work", "personal"):
+            os.makedirs(os.path.join(root, name))
+        return root
+
+    def test_scenario_profile_routes_login_and_status_to_that_folder(self):
+        root = self._make_profiles()
+        personal = os.path.join(root, "personal")
+        extra = {"GCLOUD_PROFILES_ROOT": root, "CLOUDSDK_CONFIG": os.path.join(root, "work")}
+
+        res_start = self._run_cli("start", "--profile", "personal", extra_env=extra)
+        self.assertEqual(res_start.returncode, 0, res_start.stdout + res_start.stderr)
+        self.assertTrue(os.path.exists(os.path.join(self.state_dir, "personal", "worker.pid")))
+
+        # A work session started meanwhile must not kill the pending personal one.
+        res_work = self._run_cli("start", "--profile", "work", extra_env=extra)
+        self.assertEqual(res_work.returncode, 0, res_work.stdout + res_work.stderr)
+        self.assertTrue(os.path.exists(os.path.join(self.state_dir, "personal", "worker.pid")))
+
+        res_finish = self._run_cli("finish", "--stdin", "--profile", "personal", stdin_text=PLANTED_AUTH_CODE, extra_env=extra)
+        self.assertEqual(res_finish.returncode, 0, res_finish.stdout + res_finish.stderr)
+        self.assertIn("CFG=" + personal + " GAC=" + os.path.join(personal, "application_default_credentials.json"), res_finish.stdout)
+
+        res_status = self._run_cli("status", "--profile", "personal", extra_env=extra)
+        self.assertEqual(res_status.returncode, 0, res_status.stdout)
+        self.assertIn("PROFILE: personal", res_status.stdout)
+        self.assertIn("CFG=" + personal, res_status.stdout)
+
+        res_wfinish = self._run_cli("finish", "--stdin", "--profile", "work", stdin_text=PLANTED_AUTH_CODE, extra_env=extra)
+        self.assertEqual(res_wfinish.returncode, 0, res_wfinish.stdout + res_wfinish.stderr)
+        self.assertIn("CFG=" + os.path.join(root, "work"), res_wfinish.stdout)
+
+    def test_scenario_unknown_profile_fails_before_spawning(self):
+        root = self._make_profiles()
+        res = self._run_cli("start", "--profile", "nosuch", extra_env={"GCLOUD_PROFILES_ROOT": root})
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("gcloud profile folder not found", res.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.state_dir, "nosuch")))
 
     def test_scenario_happy_path_start_finish_and_replay_blocked(self):
         # 1. Start session

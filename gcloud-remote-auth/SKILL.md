@@ -23,6 +23,9 @@ Non-interactive two-step `gcloud` and Application Default Credentials (`ADC`) lo
 | **Specific Google Account** | `--account user@domain.com` | Adds `--account=user@domain.com` |
 | **ADC Only (Preserve separate CLI account)** | `--adc-only` | `gcloud auth application-default login --no-launch-browser --quiet` |
 | **BigQuery Federated Google Drive / Sheets** | `--enable-gdrive-access` | Adds `--enable-gdrive-access` |
+| **Named gcloud profile (e.g. work, personal)** | `--profile NAME` on `start`, `finish` **and** `status` | Runs under `~/.config/gcloud/NAME`: sets `CLOUDSDK_CONFIG` and `GOOGLE_APPLICATION_CREDENTIALS` |
+
+**Profiles.** If the user keeps one gcloud folder per account (`~/.config/gcloud/<name>`, root overridable with `GCLOUD_PROFILES_ROOT`), pass the same `--profile <name>` to all three steps whenever the user names an account other than the one the session started with (for example "sign in personal"). Without it, the script follows whatever `CLOUDSDK_CONFIG` the agent inherited. Each profile keeps its own session folder, so a pending personal sign-in survives a new work sign-in. Never set only `CLOUDSDK_CONFIG` by hand: `status` checks ADC through `GOOGLE_APPLICATION_CREDENTIALS` and would report the other profile.
 
 ---
 

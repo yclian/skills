@@ -5,10 +5,14 @@ helper for remote or headless AI agents whose shell tools cannot send interactiv
 stdin (`--no-launch-browser`).
 
 Subcommands:
-  status                                           Check gcloud CLI + ADC token health
-  start [--account EMAIL] [--adc-only] [--enable-gdrive-access]
+  status [--profile NAME]                          Check gcloud CLI + ADC token health
+  start [--profile NAME] [--account EMAIL] [--adc-only] [--enable-gdrive-access]
                                                    Spawn detached worker and print AUTH_URL
-  finish [<CODE> | --stdin]                        Send verification code to worker and complete login
+  finish [--profile NAME] [<CODE> | --stdin]       Send verification code to worker and complete login
+
+--profile NAME targets one gcloud config folder, <root>/NAME, where <root> is
+$GCLOUD_PROFILES_ROOT or ~/.config/gcloud. It sets CLOUDSDK_CONFIG and
+GOOGLE_APPLICATION_CREDENTIALS for gcloud, and keeps a separate session per profile.
 """
 import argparse
 import os
@@ -23,16 +27,34 @@ from typing import Optional
 
 EXIT_SENTINEL_PREFIX = "__GCLOUD_REMOTE_AUTH_EXIT__:"
 OAUTH_URL_RE = re.compile(r"(https://accounts\.google\.com/\S+)")
+PROFILE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 ACCOUNT_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
 
-def get_state_dir(override: Optional[str] = None) -> str:
+def profile_env(name: str, root: Optional[str] = None) -> dict[str, str]:
+    """Pure-ish transform: env vars that point gcloud, Python and Node SDKs at one profile folder."""
+    if not PROFILE_RE.match(name or ""):
+        raise ValueError(f"Invalid profile name: {name!r} (use lowercase letters, digits, - or _)")
+    base = root or os.environ.get("GCLOUD_PROFILES_ROOT") or os.path.join(os.path.expanduser("~"), ".config", "gcloud")
+    folder = os.path.abspath(os.path.join(base, name))
+    if not os.path.isdir(folder):
+        raise ValueError(f"gcloud profile folder not found: {folder} (create it first, e.g. run gcp-{name} once)")
+    return {
+        "CLOUDSDK_CONFIG": folder,
+        "GOOGLE_APPLICATION_CREDENTIALS": os.path.join(folder, "application_default_credentials.json"),
+    }
+
+
+def get_state_dir(override: Optional[str] = None, profile: Optional[str] = None) -> str:
     """Return a user-private (0700) state directory, rejecting symlinks and foreign UIDs."""
     path = (
         override
         or os.environ.get("GCLOUD_REMOTE_AUTH_STATE_DIR")
         or os.path.join(os.path.expanduser("~"), ".cache", "gcloud-remote-auth")
     )
+    if profile:
+        # One session per profile: a pending personal login survives a new work login.
+        path = os.path.join(path, profile)
     path = os.path.abspath(path)
     os.makedirs(path, mode=0o700, exist_ok=True)
 
@@ -368,8 +390,10 @@ def finish(state_dir: str, code: str, wait_seconds: float = 30.0) -> int:
     return 1
 
 
-def status() -> int:
+def status(profile: Optional[str] = None) -> int:
     gcloud_bin = resolve_gcloud_bin()
+    if profile:
+        print(f"PROFILE: {profile} ({os.environ.get('CLOUDSDK_CONFIG')})")
     try:
         res_list = subprocess.run(
             [gcloud_bin, "auth", "list"],
@@ -423,6 +447,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="Check current gcloud CLI and ADC token health")
     p_status.add_argument("--state-dir", default=None, help=argparse.SUPPRESS)
+    p_status.add_argument("--profile", default=None, help="gcloud profile folder name, e.g. work or personal")
 
     for name in ("start", "_worker"):
         p = sub.add_parser(
@@ -441,12 +466,14 @@ def build_parser() -> argparse.ArgumentParser:
             help="Request Google Drive scope for BigQuery federated Drive tables",
         )
         p.add_argument("--state-dir", default=None, help=argparse.SUPPRESS)
+        p.add_argument("--profile", default=None, help="gcloud profile folder name, e.g. work or personal")
         p.add_argument("--timeout", type=float, default=600.0, help=argparse.SUPPRESS)
 
     p_finish = sub.add_parser("finish", help="Submit verification code to complete login")
     p_finish.add_argument("code", nargs="?", default=None, help="Verification code from Google OAuth page")
     p_finish.add_argument("--stdin", action="store_true", help="Read verification code from stdin")
     p_finish.add_argument("--state-dir", default=None, help=argparse.SUPPRESS)
+    p_finish.add_argument("--profile", default=None, help="gcloud profile folder name used at start")
 
     return parser
 
@@ -459,9 +486,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 1
 
     try:
-        state_dir = get_state_dir(getattr(args, "state_dir", None))
+        profile = getattr(args, "profile", None)
+        if profile:
+            # Validate before touching disk; the detached worker and gcloud inherit this env.
+            os.environ.update(profile_env(profile))
+        state_dir = get_state_dir(getattr(args, "state_dir", None), profile=profile)
         if args.subcommand == "status":
-            return status()
+            return status(profile)
         elif args.subcommand == "_worker":
             return worker(
                 state_dir,
