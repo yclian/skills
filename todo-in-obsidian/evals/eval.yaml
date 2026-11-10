@@ -19,6 +19,7 @@ cases:
   files:
     - evals/cases/disposition-codes.yaml
     - evals/cases/template-discovery.yaml
+    - evals/cases/bulk-accept.yaml
   # Default constraints inherited by every case unless the case overrides them.
   defaults:
     timeout_seconds: 120
