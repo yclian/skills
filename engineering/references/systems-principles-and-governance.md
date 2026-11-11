@@ -71,13 +71,14 @@ Frameworks, SDKs, and agent harnesses rotate every few years; the failure modes 
 - **Change Management Is Migration**: Entropy is the default state of software. Every real change is a **system and data migration** (backward-compatible schema evolution, dual-write, backfill, cutover)—your speed of change is governed by how cleanly you transition off the existing state.
 
 #### 10. Build Habits and Shape the Environment
-> **Alternate intense focus with diffuse rest to break past old mental ruts, and test real competence through recall rather than familiarity. Build durable habits instead of burning scarce willpower before automating your life, and when leading others, fix the environment and clarity first without compromising your standards to be liked.**
+> **Rely on durable habits and clear environments rather than willpower. Know your habits before automating them, and shape conditions where the right action is natural.**
 - **Step 1 — Know the Habit Before Automating**: Only automate workflows that are already proven, living habits. Turning an unpracticed wish into a background cron creates noise that gets ignored.
 - **Cold Verification Over Familiarity**: Reading generated code and nodding along is the **Illusion of Competence**. Verify competence cold via independent Reviewer Probes written from the spec *before* reading the implementation, and break *Einstellung* ruts (repeating the same failed approach) by stepping back or switching context.
-- **Environment & Spec Clarity First**: When a `worker` agent or engineer underperforms, audit the environment, tooling friction, and spec clarity first before blaming the executor—and uphold strict quality gates without softening feedback to be liked.
+- **Environment & Spec Clarity First**: When a `worker` agent or engineer underperforms, audit the environment, tooling friction, and spec clarity first before blaming the executor.
+- **Standards Over Trying to Be Liked**: Warmth keeps communication open, so never be needlessly abrasive, yet uphold strict quality gates directly without softening feedback to be liked.
 
 #### 11. Understand Causality and Participate Fully
-> **Understand causal mechanics to free yourself from hope, fear, and imagination. Be a participant with total integrity, not an outsider with expectations, starting over every dawn.**
+> **Understand causal mechanics to free yourself from hope, fear, and imagination. Be a participant with total integrity, not an outsider with expectations.**
 - **Deterministic Safeguards Over Hope**: Replace hope and fear around deployments with causal mechanics: explicit `dryRun` flags, idempotent upserts, secret-shell separation, and pre-committed freeze windows.
 - **Clean Session Continuity**: When an experiment fails or a session ends, capture the truth in git (`./docs/specs/`, `./docs/plans/`) and `ai-memory` handoffs, squash noisy WIP commits into clean logical categories, and start the next iteration fresh without sunk-cost baggage.
 
