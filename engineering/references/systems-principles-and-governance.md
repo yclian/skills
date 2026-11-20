@@ -68,6 +68,7 @@ Frameworks, SDKs, and agent harnesses rotate every few years; the failure modes 
 #### 9. Obligate Dissent and Drive Progression
 > **Expose contradictions and obligate dissent to reach the best decision, then commit fully and drive progression over perfection.**
 - **Pugh Dissent & Imperative ADRs**: Consensus is not everyone agreeing; it is everyone agreeing to find the best idea. Steelman the strongest counter-argument in a **Pugh Decision Matrix**, run `breaker` + `reviewer` as adversarial checks, and record the final decision imperatively in an ADR focused on the *Why* (preventing the **Groundhog Day anti-pattern** of re-litigating settled decisions).
+- **Thank Dissent, Answer With the Plan**: Thank dissent publicly when it arrives; reply with the plan and its tracking, not a defence.
 - **Change Management Is Migration**: Entropy is the default state of software. Every real change is a **system and data migration** (backward-compatible schema evolution, dual-write, backfill, cutover)—your speed of change is governed by how cleanly you transition off the existing state.
 
 #### 10. Build Habits and Shape the Environment
