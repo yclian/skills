@@ -1,9 +1,11 @@
 ---
 name: yclian-engineering
-description: "Core software engineering, coding, testing, git workflow, resilience, and architecture standards grounded by YC Lian. Use when writing or refactoring code, designing tests (Dual-Boundary / Reality-and-Oracle Verification), making git commits or preparing PRs (Conventional Commits, Jira refs, squashing granular commits by category), structuring modules/packages, building resilient cloud/serverless integrations, or writing architecture docs (ARCH.md, DATAFLOW.md, ADRs) and implementation plans."
+description: "Core software engineering, coding, testing, git workflow, resilience, and architecture standards grounded by YC Lian. Use when writing or refactoring code, designing tests (Dual-Boundary / Reality-and-Oracle Verification), making git commits, merging branches or preparing PRs (Conventional Commits, Jira refs, squashing granular commits by category), structuring modules/packages, building resilient cloud/serverless integrations or scheduled (Hermes cron) jobs, or writing architecture docs (ARCH.md, DATAFLOW.md, ADRs) and implementation plans."
 ---
 
 # Engineering Standards & Principles (`yclian-engineering`)
+
+**Base standard:** this skill extends ServiceRocket's [`vibes/standards/coding`](https://bitbucket.org/servicerocket-coe/vibes/src/master/standards/coding/) (skill `servicerocket-coding-standards`). Load it first; the rules below add to it.
 
 ## Why This Exists: Engineering for the Agentic Era
 
@@ -19,7 +21,7 @@ We no longer live in that era. Autonomous coding agents made code generation fas
 
 ## 1. Git Commit & History Discipline (Always-On)
 
-Apply these three rules on every commit and branch across all repositories and agent harnesses:
+Apply these rules on every commit, branch and merge across all repositories and agent harnesses:
 
 1. **Conventional Commits**:
    - Format: `<type>(<scope>): <imperative summary>` (lowercase type, no trailing period, $\le 72$ chars).
@@ -36,6 +38,7 @@ Apply these three rules on every commit and branch across all repositories and a
 4. **Worktree Isolation (`.worktrees/`) & Branch Naming**:
    - Branch format: `type/lowercase-no-dash-key-slug` (e.g., `feat/proj123-plans-overview`, `fix/jira456-module-load`).
    - Develop non-trivial changes inside an isolated git worktree (`.worktrees/<name>`) rather than dirtying the primary checkout.
+5. **Semantic Merge Check**: after a merge or rebase that removes a name the other side still uses, run the semantic merge check in `vibes/standards/coding` (`resources/git-workflow.md`).
 
 ---
 
@@ -83,6 +86,7 @@ Agents made black-box harnesses cheap and white-box mocked unit tests dangerous 
   5. **Published vectors / Hand-computed examples** (e.g., RFC 7636 PKCE vector).
   - *Rank 6 (Invariants)* and *Rank 7 (Goldens / Phase 0 Characterisation)* are **guards**, never standalone certification.
 - **Reviewer Probes**: A reviewer writes adversarial probes from the spec without reading the implementation first; probes that find defects are promoted into permanent scenarios.
+- **Flaky Tests**: reproduce on base first, per `vibes/standards/coding` (`resources/testing.md` section 10).
 
 👉 **Load [`references/dual-boundary-verification.md`](./references/dual-boundary-verification.md)** for the complete classification matrix, scenario-when-no-plan protocol, and the **4 copy-pasteable thin `test/support/` implementations** (`TestClock`, `planted.ts`, `recordingFetch` + `afterEach` invariant sweep, and `runStoreSuite` model checking).
 
@@ -127,8 +131,9 @@ Agents made black-box harnesses cheap and white-box mocked unit tests dangerous 
 6. **Log at the Failure Site + Redact Copy Only**:
    - Log `ERROR` with full context at the exact `catch` site; end-of-job summaries are recaps at `WARN`. Never log actual failures at `INFO`/`AUDIT` (silent failure trap).
    - Redact PII on a *shallow copy* passed to the logger—never mutate the live payload in flight.
+7. **Feature Flags**: follow the flag lifecycle in the app-level `AGENTS.md` where flags exist (e.g. Craft's `apps/craft/AGENTS.md`).
 
-👉 **Load [`references/resilience-and-state.md`](./references/resilience-and-state.md)** for patterns and production post-mortem traps.
+👉 **Load [`references/resilience-and-state.md`](./references/resilience-and-state.md)** for patterns, production post-mortem traps, and scheduled-job (Hermes cron) traps.
 
 ---
 

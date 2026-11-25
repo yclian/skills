@@ -78,3 +78,11 @@ function secretFingerprint(val = "") {
    - End-of-job summaries are recaps (`WARN` or `INFO`); never swallow site errors into an `INFO`-only summary that looks green in log monitors.
 2. **Redact a Shallow Copy, Never Live Data**:
    - When stripping PII or tokens before logging, clone the object first (`const safe = { ...payload, token: "[REDACTED]" }`). Mutating the live object in place corrupts downstream business logic.
+
+---
+
+## 6. Scheduled Jobs on Hermes (`hermes cron`, observed 2026.W48)
+
+- **Schedules run in the machine's local time**: `hermes cron create` has no `--timezone`. Write the schedule in the host's local zone, and pass every option before the schedule argument.
+- **Jobs run as the `hermes` Windows user**: the gateway executes jobs as `hermes`, not the operator. A job that needs the operator's checkout, SSH key or cookie fails unless it runs as the operator or `hermes` has its own copy.
+- **`hermes cron run <id>` does not prove the scheduled run**: from a CLI it runs in the caller's context (user, environment, credentials). Prove a job by the gateway's own scheduled run: fresh output and exit code 0.

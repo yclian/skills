@@ -47,6 +47,7 @@ In integration-heavy systems, 90% of defects live in the gap between what the de
 - **Capture first, code second**: Before writing an adapter or refactoring a legacy module, capture real boundary artifacts into `test/fixtures/` (or `docs/prod-import/`):
   - **HTTP / API edges**: Run a one-off recorder script (`scripts/record-fixtures.ts`) against a test account to save `test/fixtures/<service>/<endpoint>.{ok,err}.json` (one success + one error per endpoint), replacing live tokens/PII with `PLANTED_*` sentinels.
   - **Platform records & configs (e.g., NetSuite / ERP / CRM)**: Pull real record instances (`?id=<id>&xml=t`), SuiteQL JSON dumps with all raw columns/nulls, and live deployed script/object XML (`suitecloud object:import` / `file:import` → `*.fromprod.xml`) to true-up against production drift before editing.
+- **Undocumented APIs**: probe before you build, per `vibes/standards/coding` (`resources/testing.md` section 8, rule 6).
 - **Contrastive Fixture Pairs (Differential Ingress)**: Capture **pairs** from reality whose difference defines the behavior:
   - `with-feature.xml` vs. `without-feature.xml`
   - `<endpoint>.ok.json` vs. `<endpoint>.err.json`
